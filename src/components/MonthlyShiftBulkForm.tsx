@@ -185,7 +185,7 @@ export function MonthlyShiftBulkForm({
   }, [allRows, shop, inputIsoDates]);
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-2xl border border-stone-200 bg-stone-50 p-4 shadow-sm sm:p-5">
       <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-stone-800">
         <CalendarRange className="h-5 w-5 text-stone-500" />
         月を選んで一括登録

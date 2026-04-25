@@ -8,6 +8,8 @@ import type { ShopDayOverride, ShopName } from "@/lib/types";
 type Props = {
   overrides: ShopDayOverride[];
   onAfterChange: () => void | Promise<void>;
+  /** 親に見出しを置く場合、パネル内のタイトルを出さない */
+  hideTitle?: boolean;
 };
 
 async function parseJson(
@@ -28,7 +30,11 @@ function effectLabel(iso: string): { kind: "open" | "closed"; text: string } {
   return { kind: "open", text: "特別営業（原則休みの日を営業に）" };
 }
 
-export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
+export function ShopOperatingDayPanel({
+  overrides,
+  onAfterChange,
+  hideTitle = false,
+}: Props) {
   const idDate = useId();
   const idShop = useId();
   const [date, setDate] = useState("");
@@ -113,8 +119,10 @@ export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
       role="region"
       aria-label="店舗営業・休業の設定"
     >
-      <h3 className="font-semibold text-slate-900">店舗営業・休業設定</h3>
-      <p className="mt-1 text-slate-600">
+      {hideTitle ? null : (
+        <h3 className="font-semibold text-slate-900">店舗営業・休業設定</h3>
+      )}
+      <p className={hideTitle ? "text-slate-600" : "mt-1 text-slate-600"}>
         デフォルト: <strong>土日祝は休み</strong>、<strong>平日（祝日を除く）は営業</strong>。
         下記で「例外」を登録します（<strong>特別営業</strong>: 原則休みの日を営業に /
         <strong>特別休業</strong>: 原則営業の日を休みに）。シート

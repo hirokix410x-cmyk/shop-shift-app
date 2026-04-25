@@ -78,16 +78,21 @@ export function ShiftBoard({
             <Calendar className="h-5 w-5 text-stone-500" />
             週次シフト
           </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-600">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50/90 px-2.5 py-0.5 font-medium text-red-900">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden />
+              募集中
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/90 px-2.5 py-0.5 font-medium text-blue-950">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600" aria-hidden />
+              本部社員
+            </span>
+          </div>
           <p className="mt-1 text-xs text-stone-500">
-            <span className="text-red-700">赤</span>＝募集中 / 未充足、
-            <span className="text-blue-800">青</span>＝本部社員の枠
-          </p>
-          <p className="text-xs text-stone-500">
             日付帯: <span className="text-blue-800">土</span>＝青、
             <span className="text-red-700">日祝</span>＝薄赤
-          </p>
-          <p className="text-xs text-stone-500">
-            先頭の日＝起算日（初回は今日から7日）。土日祝は原則休（登録で特別営業）。平日（祝日を除く）は原則営（登録で特別休）。
+            <span className="mx-1 text-stone-300">|</span>
+            先頭の日＝起算日（初回は今日から7日）。土日祝は原則休（登録で特別営）。平日（祝日を除く）は原則営（登録で特別休）。
           </p>
         </div>
         <div className="flex items-center justify-center gap-2">
@@ -145,10 +150,13 @@ export function ShiftBoard({
                       <span className="text-amber-800/90">({formatWeekday(d)})</span>
                     </p>
                     <span
-                      className="shrink-0 rounded-md bg-amber-500 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
-                      lang="en"
+                      className="shrink-0 rounded-md bg-amber-500 px-2.5 py-0.5 text-xs font-bold tracking-wide text-white"
+                      title="本日"
                     >
-                      Today
+                      今日
+                      <span className="ml-1 font-normal" lang="en">
+                        / Today
+                      </span>
                     </span>
                   </div>
                 ) : (
