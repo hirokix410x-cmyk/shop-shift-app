@@ -2,6 +2,7 @@
   "name": "shop-shift-app",
   "private": true,
   "version": "0.1.0",
+  "description": "Pita Work — ぴたカフェ店舗シフト管理（Next.js / Google Spreadsheet）",
   "scripts": {
     "dev": "next dev -p 3011",
     "build": "next build",

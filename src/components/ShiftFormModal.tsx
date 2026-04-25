@@ -75,6 +75,13 @@ export function ShiftFormModal({
   const isNew = context.kind === "new";
   const isConfirmedEdit = !isNew && context.row.status === "確定";
   const nameOptions = staffOptionsForShop(shop);
+  const nameSelectOptions = (() => {
+    const o = new Set(nameOptions);
+    if (!isNew && context.row.staff_name && !o.has(context.row.staff_name)) {
+      return [context.row.staff_name, ...nameOptions];
+    }
+    return nameOptions;
+  })();
 
   return (
     <div
@@ -107,7 +114,11 @@ export function ShiftFormModal({
               setErr("イレギュラーの場合は時間帯・内容を備考に記入してください。");
               return;
             }
-            const staff = staffName.trim() === "" ? null : staffName.trim();
+            const staff = staffName.trim();
+            if (staff === "") {
+              setErr("氏名をリストから選んでください。");
+              return;
+            }
             const n = note.trim();
             if (isNew) {
               await onCreate({
@@ -154,7 +165,14 @@ export function ShiftFormModal({
             <select
               className="min-h-[44px] w-full rounded-lg border border-stone-200 bg-stone-50 px-2"
               value={shop}
-              onChange={(e) => setShop(e.target.value as ShopName)}
+              onChange={(e) => {
+                const s = e.target.value as ShopName;
+                setShop(s);
+                setStaffName((prev) => {
+                  const next = staffOptionsForShop(s);
+                  return next.includes(prev) ? prev : "";
+                });
+              }}
               required
             >
               {SHOPS.map((s) => (
@@ -199,19 +217,28 @@ export function ShiftFormModal({
             ) : null}
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium text-stone-700">氏名</label>
-            <input
-              list={listId}
+            <label className="text-sm font-medium text-stone-700" htmlFor={listId}>
+              氏名（必須・リストから選択）
+            </label>
+            <select
+              id={listId}
               className="min-h-[44px] w-full rounded-lg border border-stone-200 bg-stone-50 px-2"
               value={staffName}
               onChange={(e) => setStaffName(e.target.value)}
-              placeholder="空欄＝未割当（募集枠）"
-            />
-            <datalist id={listId}>
-              {nameOptions.map((n) => (
-                <option key={n} value={n} />
+              required
+            >
+              <option value="">
+                氏名を選択してください
+              </option>
+              {nameSelectOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
               ))}
-            </datalist>
+            </select>
+            <p className="text-xs text-stone-500">
+              掲載にない氏名のときは、管理者に master の追加を依頼してください。
+            </p>
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium text-stone-700">備考</label>

@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarRange } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
 import { isStoreClosed } from "@/lib/shopOperatingDay";
 import type { ShopDayOverride, ShopName, ShiftRow, ShiftType } from "@/lib/types";
@@ -54,9 +54,9 @@ export function MonthlyShiftBulkForm({
   allRows,
   shopDayOverrides,
 }: Props) {
-  const listId = useId();
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
   const [monthOffset, setMonthOffset] = useState<0 | 1 | 2>(1);
+  /** 一括1名分: 空は未選択（送信不可） */
   const [staffName, setStaffName] = useState("");
   const [noteAll, setNoteAll] = useState("");
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
@@ -141,6 +141,7 @@ export function MonthlyShiftBulkForm({
       return t != null && t !== "";
     }).length;
   }, [inputIsoDates, dayMap]);
+  const canSubmitBulk = selectedCount > 0 && staffName.trim() !== "";
 
   const isoSet = useMemo(() => new Set(isoDates), [isoDates]);
 
@@ -269,6 +270,7 @@ export function MonthlyShiftBulkForm({
             value={shop}
             onChange={(e) => {
               setShop(e.target.value as ShopName);
+              setStaffName("");
             }}
           >
             {SHOPS.map((s) => (
@@ -280,23 +282,33 @@ export function MonthlyShiftBulkForm({
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-stone-700" htmlFor="bulk-staff">
-            氏名（空欄＝未割当・募集枠、任意の名前も入力可）
+            氏名（必須・一括行に同一氏名を付与）
           </label>
-          <input
+          <select
             id="bulk-staff"
             name="staff"
-            list={listId}
             className="min-h-[48px] w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-base"
             value={staffName}
-            onChange={(e) => setStaffName(e.target.value)}
-            placeholder="未入力で募集枠"
-            autoComplete="off"
-          />
-          <datalist id={listId}>
+            onChange={(e) => {
+              setStaffName(e.target.value);
+              setSubmitErr(null);
+            }}
+            aria-label="一括希望の氏名（必須）"
+          >
+            <option value="">
+              {selectedCount > 0
+                ? "氏名を選択してください"
+                : "日付の区分を入れると送信時に必須になります"}
+            </option>
             {nameOptions.map((n) => (
-              <option key={n} value={n} />
+              <option key={n} value={n}>
+                {n}
+              </option>
             ))}
-          </datalist>
+          </select>
+          <p className="mt-1 text-xs text-stone-500">
+            掲載にない氏名のときは、管理者に <code className="rounded bg-stone-200/80 px-1">master.ts</code> への追加を依頼してください。
+          </p>
         </div>
         <div className="sm:col-span-2">
           <label className="text-sm font-medium text-stone-700" htmlFor="bulk-note">
@@ -419,10 +431,14 @@ export function MonthlyShiftBulkForm({
 
       <button
         type="button"
-        disabled={saving || submitDisabled || selectedCount === 0}
+        disabled={saving || submitDisabled || !canSubmitBulk}
         onClick={async () => {
           setSubmitErr(null);
-          const staff = staffName.trim() === "" ? null : staffName.trim();
+          const staff = staffName.trim();
+          if (selectedCount > 0 && staff === "") {
+            setSubmitErr("氏名をリストから選択してください。");
+            return;
+          }
           const globalN = noteAll.trim();
           const rows: ShiftRow[] = [];
           for (const iso of inputIsoDates) {

@@ -311,7 +311,10 @@ export function shiftFromRequestBody(data: unknown): ShiftRow {
   const shop = shopRaw as ShopName;
 
   const sn = o.staff_name;
-  const staff_name = sn == null || String(sn).trim() === "" ? null : String(sn).trim();
+  if (sn == null || String(sn).trim() === "") {
+    throw new TypeError("氏名（staff_name）は必須です。リストから選択してください。");
+  }
+  const staff_name = String(sn).trim();
 
   const typeRaw = String(o.type ?? "").trim();
   if (!SHIFT_TYPE_SET.has(typeRaw)) {
@@ -376,8 +379,10 @@ export function shiftPatchFromRequestBody(data: unknown): {
   }
   if ("staff_name" in o) {
     const sn = o.staff_name;
-    patch.staff_name =
-      sn == null || String(sn).trim() === "" ? null : String(sn).trim();
+    if (sn == null || String(sn).trim() === "") {
+      throw new TypeError("氏名（staff_name）を空にすることはできません。リストから選択してください。");
+    }
+    patch.staff_name = String(sn).trim();
   }
   if ("date" in o && o.date != null && String(o.date).trim() !== "") {
     const d = String(o.date).trim();
