@@ -32,7 +32,7 @@ export const initialMockShifts: ShiftRow[] = [
     id: "m4",
     date: "2026-04-25",
     shop: "中村学園大学前店",
-    staff_name: "スタッフA",
+    staff_name: "福田",
     type: "全日",
     note: "",
     status: "希望",

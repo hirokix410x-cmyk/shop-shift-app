@@ -143,6 +143,76 @@ export async function appendShiftToSheet(shift: ShiftRow): Promise<void> {
   await sheet.addRow(shiftToRecord(shift));
 }
 
+export async function appendShiftsToSheet(shifts: ShiftRow[]): Promise<void> {
+  if (shifts.length === 0) return;
+  const sheet = await getShiftsWorksheet();
+  await sheet.addRows(shifts.map(shiftToRecord));
+}
+
+/**
+ * 先頭シート上で id 列が一致する行を更新（保存）する
+ */
+export async function updateShiftByIdInSheet(
+  id: string,
+  patch: {
+    status?: ShiftStatus;
+    type?: ShiftType;
+    note?: string;
+    staff_name?: string | null;
+  },
+): Promise<void> {
+  if (
+    patch.status == null &&
+    patch.type == null &&
+    patch.note === undefined &&
+    patch.staff_name === undefined
+  ) {
+    throw new Error("更新内容がありません");
+  }
+  const sheet = await getShiftsWorksheet();
+  const rows = await sheet.getRows();
+  for (const r of rows) {
+    if (cellString(r.get("id")) !== id) {
+      continue;
+    }
+    if (patch.status != null) {
+      r.set("status", patch.status);
+    }
+    if (patch.type != null) {
+      r.set("type", patch.type);
+    }
+    if (patch.note !== undefined) {
+      r.set("note", patch.note);
+    }
+    if (patch.staff_name !== undefined) {
+      r.set("staff_name", patch.staff_name ?? "");
+    }
+    await r.save();
+    return;
+  }
+  throw new Error(`該当する行が見つかりません (id: ${id})`);
+}
+
+export function shiftsArrayFromRequestBody(data: unknown): ShiftRow[] {
+  if (data == null || typeof data !== "object") {
+    throw new TypeError("JSON オブジェクトが必要です");
+  }
+  const o = data as { shifts?: unknown };
+  if (!Array.isArray(o.shifts) || o.shifts.length === 0) {
+    throw new TypeError("shifts には1件以上のオブジェクト配列を指定してください");
+  }
+  const out: ShiftRow[] = [];
+  for (let i = 0; i < o.shifts.length; i++) {
+    try {
+      out.push(shiftFromRequestBody(o.shifts[i]));
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      throw new TypeError(`shifts[${i}]: ${m}`);
+    }
+  }
+  return out;
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -185,4 +255,63 @@ export function shiftFromRequestBody(data: unknown): ShiftRow {
   const status = statusRaw as ShiftStatus;
 
   return { id, date, shop, staff_name, type, note, status };
+}
+
+export function shiftPatchFromRequestBody(data: unknown): {
+  id: string;
+  status?: ShiftStatus;
+  type?: ShiftType;
+  note?: string;
+  staff_name?: string | null;
+} {
+  if (data == null || typeof data !== "object") {
+    throw new TypeError("JSON オブジェクトが必要です");
+  }
+  const o = data as Record<string, unknown>;
+  const id = String(o.id ?? "").trim();
+  if (!id) {
+    throw new TypeError("id が空です");
+  }
+  const patch: {
+    id: string;
+    status?: ShiftStatus;
+    type?: ShiftType;
+    note?: string;
+    staff_name?: string | null;
+  } = { id };
+
+  if ("status" in o && o.status != null && String(o.status).trim() !== "") {
+    const s = String(o.status).trim();
+    if (!STATUS_SET.has(s)) {
+      throw new TypeError("status は 希望 または 確定 です");
+    }
+    patch.status = s as ShiftStatus;
+  }
+  if ("type" in o && o.type != null && String(o.type).trim() !== "") {
+    const t = String(o.type).trim();
+    if (!SHIFT_TYPE_SET.has(t)) {
+      throw new TypeError("type が不正です");
+    }
+    patch.type = t as ShiftType;
+  }
+  if ("note" in o) {
+    patch.note = o.note == null ? "" : String(o.note);
+  }
+  if ("staff_name" in o) {
+    const sn = o.staff_name;
+    patch.staff_name =
+      sn == null || String(sn).trim() === "" ? null : String(sn).trim();
+  }
+
+  if (
+    patch.status == null &&
+    patch.type == null &&
+    patch.note === undefined &&
+    patch.staff_name === undefined
+  ) {
+    throw new TypeError(
+      "status / type / note / staff_name のいずれかを指定してください",
+    );
+  }
+  return patch;
 }

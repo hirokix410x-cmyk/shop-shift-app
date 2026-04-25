@@ -12,13 +12,23 @@ type Props = {
   rows: ShiftRow[];
   anchor: Date;
   onAnchorChange: (d: Date) => void;
+  adminMode?: boolean;
+  onConfirmRow?: (id: string) => void | Promise<void>;
+  confirmingId?: string | null;
 };
 
 function formatWeekday(d: Date) {
   return new Intl.DateTimeFormat("ja-JP", { weekday: "short" }).format(d);
 }
 
-export function ShiftBoard({ rows, anchor, onAnchorChange }: Props) {
+export function ShiftBoard({
+  rows,
+  anchor,
+  onAnchorChange,
+  adminMode = false,
+  onConfirmRow,
+  confirmingId,
+}: Props) {
   const windowStart = startOfWindow(anchor);
   const days = useMemo(() => {
     const list: Date[] = [];
@@ -147,6 +157,20 @@ export function ShiftBoard({ rows, anchor, onAnchorChange }: Props) {
                                 </div>
                                 {row.note ? (
                                   <p className="text-xs text-stone-500">備考: {row.note}</p>
+                                ) : null}
+                                {adminMode &&
+                                row.status === "希望" &&
+                                onConfirmRow ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onConfirmRow(row.id)}
+                                    disabled={confirmingId === row.id}
+                                    className="mt-1 min-h-[36px] w-full rounded-lg bg-amber-600 text-xs font-semibold text-white disabled:opacity-50"
+                                  >
+                                    {confirmingId === row.id
+                                      ? "確定処理中…"
+                                      : "この希望を確定"}
+                                  </button>
                                 ) : null}
                               </li>
                             );

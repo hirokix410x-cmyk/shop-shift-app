@@ -1,0 +1,163 @@
+"use client";
+
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useMemo } from "react";
+import { SHOP_TAB_LABEL } from "@/lib/master";
+import { isHqStaff } from "@/lib/master";
+import type { ShopName, ShiftRow } from "@/lib/types";
+import {
+  addMonths,
+  formatYearMonth,
+  getMonthCalendarCells,
+  startOfMonth,
+  toISODateString,
+} from "@/lib/dateUtils";
+
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+type Props = {
+  shop: ShopName;
+  month: Date;
+  onMonthChange: (d: Date) => void;
+  rows: ShiftRow[];
+  adminMode: boolean;
+  onConfirmRow?: (id: string) => void | Promise<void>;
+  confirmingId?: string | null;
+};
+
+function typeShort(t: string) {
+  if (t === "午前") return "前";
+  if (t === "午後") return "後";
+  if (t === "イレギュラー") return "イ";
+  if (t === "全日") return "全";
+  return t.slice(0, 1);
+}
+
+export function MonthlyShopCalendar({
+  shop,
+  month,
+  onMonthChange,
+  rows,
+  adminMode,
+  onConfirmRow,
+  confirmingId,
+}: Props) {
+  const y = month.getFullYear();
+  const m1 = month.getMonth() + 1;
+  const cells = useMemo(() => getMonthCalendarCells(y, m1), [y, m1]);
+
+  const startStr = `${y}-${String(m1).padStart(2, "0")}-01`;
+  const lastDay = new Date(y, m1, 0).getDate();
+  const endStr = `${y}-${String(m1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, ShiftRow[]>();
+    for (const r of rows) {
+      if (r.shop !== shop) {
+        continue;
+      }
+      if (r.date < startStr || r.date > endStr) {
+        continue;
+      }
+      const arr = map.get(r.date) ?? [];
+      arr.push(r);
+      map.set(r.date, arr);
+    }
+    return map;
+  }, [rows, shop, startStr, endStr]);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-base font-semibold text-stone-800">
+          店舗別月間カレンダー — {SHOP_TAB_LABEL[shop] ?? shop}
+        </h2>
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => onMonthChange(startOfMonth(addMonths(month, -1)))}
+            className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border border-stone-200 bg-white p-2 shadow-sm"
+            aria-label="前の月"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-[7rem] text-center text-sm font-medium text-stone-700">
+            {formatYearMonth(month)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onMonthChange(startOfMonth(addMonths(month, 1)))}
+            className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border border-stone-200 bg-white p-2 shadow-sm"
+            aria-label="次の月"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 text-center text-xs">
+        {WEEKDAYS.map((w) => (
+          <div key={w} className="bg-stone-100 py-1.5 font-medium text-stone-600">
+            {w}
+          </div>
+        ))}
+        {cells.map((d, i) => {
+          if (d == null) {
+            return <div key={`p-${i}`} className="min-h-[5.5rem] bg-stone-50/50" />;
+          }
+          const key = toISODateString(d);
+          const list = byDate.get(key) ?? [];
+          return (
+            <div
+              key={key}
+              className="min-h-[5.5rem] space-y-0.5 bg-white p-1 text-left"
+            >
+              <div className="text-[11px] font-semibold text-stone-500">
+                {d.getDate()}
+              </div>
+              <ul className="space-y-0.5">
+                {list.map((r) => {
+                  const isOpen = r.staff_name == null;
+                  const hq = isHqStaff(r.staff_name);
+                  const unconfirmed = r.status === "希望";
+                  return (
+                    <li
+                      key={r.id}
+                      className={
+                        isOpen
+                          ? "rounded border border-red-300 bg-red-50 px-0.5 py-0.5 text-[10px] leading-tight text-red-900"
+                          : hq
+                            ? "rounded border border-blue-300 bg-blue-50 px-0.5 py-0.5 text-[10px] leading-tight text-blue-950"
+                            : "rounded border border-stone-200 bg-stone-50 px-0.5 py-0.5 text-[10px] leading-tight text-stone-800"
+                      }
+                    >
+                      <span
+                        className={
+                          r.status === "確定" ? "text-emerald-700" : "text-amber-700"
+                        }
+                      >
+                        {typeShort(r.type)}
+                        {r.status === "希望" ? "希" : "確"}
+                      </span>{" "}
+                      {r.staff_name ?? "募"}
+                      {adminMode && unconfirmed && onConfirmRow ? (
+                        <button
+                          type="button"
+                          onClick={() => onConfirmRow(r.id)}
+                          disabled={confirmingId === r.id}
+                          className="mt-0.5 block w-full rounded bg-amber-600 py-0.5 text-[9px] font-medium text-white disabled:opacity-50"
+                        >
+                          {confirmingId === r.id ? "…" : "確定"}
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
