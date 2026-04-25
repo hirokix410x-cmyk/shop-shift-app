@@ -2,8 +2,8 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
-import { SHOP_TAB_LABEL } from "@/lib/master";
-import { isHqStaff } from "@/lib/master";
+import { SHOP_TAB_LABEL, SHOPS, isHqStaff } from "@/lib/master";
+import type { PersonViewShopFilter } from "./PersonalShiftCalendar";
 import {
   isSpecialClosedDay,
   isSpecialOperatingDay,
@@ -26,14 +26,17 @@ import {
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 type Props = {
-  shop: ShopName;
+  /** 単一店 or 両店舗（同一グリッドに集約） */
+  shop: PersonViewShopFilter;
+  /** 「＋」の店舗（2店舗表示時は親がタブに合わせて渡す） */
+  addSlotShop: ShopName;
   month: Date;
   onMonthChange: (d: Date) => void;
   rows: ShiftRow[];
   adminMode: boolean;
   onConfirmRow?: (id: string) => void | Promise<void>;
   confirmingId?: string | null;
-  onAddForDay?: (iso: string) => void;
+  onAddForDay?: (iso: string, shop: ShopName) => void;
   onEditRow?: (row: ShiftRow) => void;
   shopDayOverrides: ShopDayOverride[];
 };
@@ -48,6 +51,7 @@ function typeShort(t: string) {
 
 export function MonthlyShopCalendar({
   shop,
+  addSlotShop,
   month,
   onMonthChange,
   rows,
@@ -69,7 +73,10 @@ export function MonthlyShopCalendar({
   const byDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();
     for (const r of rows) {
-      if (r.shop !== shop) {
+      if (shop !== "all" && r.shop !== shop) {
+        continue;
+      }
+      if (shop === "all" && !SHOPS.includes(r.shop as (typeof SHOPS)[number])) {
         continue;
       }
       if (r.date < startStr || r.date > endStr) {
@@ -79,6 +86,12 @@ export function MonthlyShopCalendar({
       arr.push(r);
       map.set(r.date, arr);
     }
+    map.forEach((arr) => {
+      arr.sort(
+        (a, b) =>
+          a.shop.localeCompare(b.shop) || (a.staff_name ?? "").localeCompare(b.staff_name ?? ""),
+      );
+    });
     return map;
   }, [rows, shop, startStr, endStr]);
 
@@ -86,7 +99,8 @@ export function MonthlyShopCalendar({
     <section className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-base font-semibold text-stone-800">
-          店舗別月間カレンダー — {SHOP_TAB_LABEL[shop] ?? shop}
+          店舗別月間カレンダー —{" "}
+          {shop === "all" ? "2店舗" : (SHOP_TAB_LABEL[shop] ?? shop)}
         </h2>
         <div className="flex items-center justify-center gap-2">
           <button
@@ -132,7 +146,8 @@ export function MonthlyShopCalendar({
           }
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
-          const dayClosed = isStoreClosed(shop, key, shopDayOverrides);
+          const dayClosed =
+            shop !== "all" && isStoreClosed(shop, key, shopDayOverrides);
           if (dayClosed) {
             const specClose = isSpecialClosedDay(shop, key, shopDayOverrides);
             return (
@@ -150,7 +165,12 @@ export function MonthlyShopCalendar({
           }
           const tone = getCalDayTone(d);
           const wkHoli = isHolidayForCalendarLabel(d);
-          const specOpen = isSpecialOperatingDay(shop, key, shopDayOverrides);
+          const specOpen =
+            shop === "all"
+              ? SHOPS.some((s) =>
+                  isSpecialOperatingDay(s, key, shopDayOverrides),
+                )
+              : isSpecialOperatingDay(shop, key, shopDayOverrides);
           return (
             <div
               key={key}
@@ -175,9 +195,9 @@ export function MonthlyShopCalendar({
                 {onAddForDay ? (
                   <button
                     type="button"
-                    onClick={() => onAddForDay(key)}
+                    onClick={() => onAddForDay(key, addSlotShop)}
                     className="shrink-0 rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-950"
-                    title="この日の枠を追加"
+                    title={`${SHOP_TAB_LABEL[addSlotShop] ?? addSlotShop}に枠を追加`}
                   >
                     ＋
                   </button>
@@ -188,6 +208,7 @@ export function MonthlyShopCalendar({
                   const isOpen = r.staff_name == null;
                   const hq = isHqStaff(r.staff_name);
                   const unconfirmed = r.status === "希望";
+                  const showShop = shop === "all";
                   return (
                     <li
                       key={r.id}
@@ -205,6 +226,13 @@ export function MonthlyShopCalendar({
                         onClick={() => onEditRow?.(r)}
                         disabled={!onEditRow}
                       >
+                        {showShop ? (
+                          <>
+                            <span className="font-medium text-amber-900/90">
+                              {SHOP_TAB_LABEL[r.shop] ?? r.shop}
+                            </span>{" "}
+                          </>
+                        ) : null}
                         <span
                           className={
                             r.status === "確定" ? "text-emerald-700" : "text-amber-700"

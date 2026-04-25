@@ -145,7 +145,8 @@ export function ShiftApp() {
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => today());
   const [boardView, setBoardView] = useState<BoardView>("week");
   const [monthCursor, setMonthCursor] = useState<Date>(() => startOfMonth(today()));
-  const [monthTabShop, setMonthTabShop] = useState<ShopName>(SHOPS[0]);
+  const [monthViewShop, setMonthViewShop] = useState<PersonViewShopFilter>("all");
+  const [monthAddShop, setMonthAddShop] = useState<ShopName>(SHOPS[0]);
   const [personAddShop, setPersonAddShop] = useState<ShopName>(SHOPS[0]);
   const [personViewShopFilter, setPersonViewShopFilter] =
     useState<PersonViewShopFilter>("all");
@@ -240,6 +241,13 @@ export function ShiftApp() {
         ? personAddShop
         : personViewShopFilter,
     [personViewShopFilter, personAddShop],
+  );
+
+  /** 店舗別月間の「＋」: 同様 */
+  const monthAddTargetShop = useMemo(
+    () =>
+      monthViewShop === "all" ? monthAddShop : monthViewShop,
+    [monthViewShop, monthAddShop],
   );
 
   const inWindow = useMemo(() => {
@@ -650,16 +658,36 @@ export function ShiftApp() {
           </div>
         ) : boardView === "month" ? (
           <div id="panel-month" className="scroll-mt-20 space-y-4">
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="店舗">
+            <div
+              className="flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="店舗別月間の店舗"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={monthViewShop === "all"}
+                onClick={() => setMonthViewShop("all")}
+                className={
+                  monthViewShop === "all"
+                    ? "min-h-[40px] rounded-lg border-2 border-amber-500 bg-amber-50 px-3 text-sm font-medium text-amber-950"
+                    : "min-h-[40px] rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                }
+              >
+                2店舗
+              </button>
               {SHOPS.map((s) => (
                 <button
                   key={s}
                   type="button"
                   role="tab"
-                  aria-selected={monthTabShop === s}
-                  onClick={() => setMonthTabShop(s)}
+                  aria-selected={monthViewShop === s}
+                  onClick={() => {
+                    setMonthViewShop(s);
+                    setMonthAddShop(s);
+                  }}
                   className={
-                    monthTabShop === s
+                    monthViewShop === s
                       ? "min-h-[40px] rounded-lg border-2 border-amber-500 bg-amber-50 px-3 text-sm font-medium text-amber-950"
                       : "min-h-[40px] rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-700"
                   }
@@ -669,14 +697,15 @@ export function ShiftApp() {
               ))}
             </div>
             <MonthlyShopCalendar
-              shop={monthTabShop}
+              shop={monthViewShop}
+              addSlotShop={monthAddTargetShop}
               month={monthCursor}
               onMonthChange={setMonthCursor}
               rows={rows}
               adminMode={adminMode}
               onConfirmRow={adminMode ? onConfirmRow : undefined}
               confirmingId={confirmingId}
-              onAddForDay={(iso) => openNew(iso, monthTabShop)}
+              onAddForDay={openNew}
               onEditRow={openEdit}
               shopDayOverrides={shopDayOverrides}
             />
