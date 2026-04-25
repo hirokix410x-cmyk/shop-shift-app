@@ -2,9 +2,10 @@
 
 import { Calendar, ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
 import { useMemo } from "react";
-import { SHOPS } from "@/lib/master";
+import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
 import { rowCardClassName } from "@/lib/shiftStyle";
-import type { ShiftRow, ShopName } from "@/lib/types";
+import { isShopClosedOn } from "@/lib/shopHolidays";
+import type { ShopHoliday, ShiftRow, ShopName } from "@/lib/types";
 import { isHqStaff } from "@/lib/master";
 import {
   addDays,
@@ -23,6 +24,8 @@ type Props = {
   confirmingId?: string | null;
   onAddForDay?: (date: string, shop: ShopName) => void;
   onEditRow?: (row: ShiftRow) => void;
+  /** 店舗休業日（週内の該当店舗枠を閉店表示に） */
+  shopHolidays: ShopHoliday[];
 };
 
 function formatWeekday(d: Date) {
@@ -38,6 +41,7 @@ export function ShiftBoard({
   confirmingId,
   onAddForDay,
   onEditRow,
+  shopHolidays,
 }: Props) {
   const windowStart = startOfWindow(anchor);
   const windowEnd = useMemo(() => addDays(windowStart, 6), [windowStart]);
@@ -155,6 +159,20 @@ export function ShiftBoard({
               <div className="grid gap-4 p-4 sm:grid-cols-2">
                 {SHOPS.map((shop) => {
                   const shopRows = list.filter((r) => r.shop === shop);
+                  const closed = isShopClosedOn(shop, key, shopHolidays);
+                  if (closed) {
+                    return (
+                      <div
+                        key={shop}
+                        className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-100/90 p-4 text-center shadow-inner"
+                        aria-label={`${shop} 店舗休業日`}
+                      >
+                        <p className="text-lg font-bold text-slate-700">店舗休業日</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{SHOP_TAB_LABEL[shop] ?? shop}</p>
+                        <p className="mt-1 text-xs text-slate-500">募集枠の登録は不要です</p>
+                      </div>
+                    );
+                  }
                   return (
                     <div
                       key={shop}

@@ -15,3 +15,9 @@ export type ShiftRow = {
   note: string;
   status: ShiftStatus;
 };
+
+/** `shop_holidays` シートの1行分（店舗×日付で休み） */
+export type ShopHoliday = {
+  date: string;
+  shop: ShopName;
+};

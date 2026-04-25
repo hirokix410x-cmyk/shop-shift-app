@@ -3,7 +3,8 @@
 import { CalendarRange } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
-import type { ShopName, ShiftRow, ShiftType } from "@/lib/types";
+import { isShopClosedOn } from "@/lib/shopHolidays";
+import type { ShopHoliday, ShopName, ShiftRow, ShiftType } from "@/lib/types";
 import { addMonths, getDaysInMonth, startOfMonth, toISODateString } from "@/lib/dateUtils";
 import {
   dayRowSurfaceClass,
@@ -27,6 +28,8 @@ type Props = {
   submitDisabled?: boolean;
   /** 重複案内・取り込み用の既存シフト行 */
   allRows: ShiftRow[];
+  /** 店舗休業日（該当する日の行を除外） */
+  shopHolidays: ShopHoliday[];
 };
 
 function todayNoon(): Date {
@@ -49,6 +52,7 @@ export function MonthlyShiftBulkForm({
   onSubmitBulk,
   submitDisabled,
   allRows,
+  shopHolidays,
 }: Props) {
   const listId = useId();
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
@@ -79,22 +83,29 @@ export function MonthlyShiftBulkForm({
     return out;
   }, [year, month1, daysInMonth]);
 
+  /** 一括対象: 店舗休業日の日付は行を出さない */
+  const inputIsoDates = useMemo(
+    () => isoDates.filter((iso) => !isShopClosedOn(shop, iso, shopHolidays)),
+    [isoDates, shop, shopHolidays],
+  );
+  const closedInMonthCount = isoDates.length - inputIsoDates.length;
+
   useEffect(() => {
     setDayMap((prev) => {
       const next: DayTypeMap = {};
-      for (const iso of isoDates) {
+      for (const iso of inputIsoDates) {
         next[iso] = (prev[iso] as ShiftType | "") ?? "";
       }
       return next;
     });
     setDayNotes((prev) => {
       const next: Record<string, string> = {};
-      for (const iso of isoDates) {
+      for (const iso of inputIsoDates) {
         next[iso] = prev[iso] ?? "";
       }
       return next;
     });
-  }, [isoDates]);
+  }, [inputIsoDates]);
 
   const setDay = useCallback((iso: string, t: ShiftType | "") => {
     setDayMap((m) => ({ ...m, [iso]: t }));
@@ -104,32 +115,32 @@ export function MonthlyShiftBulkForm({
     (t: ShiftType) => {
       setDayMap((m) => {
         const next = { ...m };
-        for (const iso of isoDates) {
+        for (const iso of inputIsoDates) {
           next[iso] = t;
         }
         return next;
       });
     },
-    [isoDates],
+    [inputIsoDates],
   );
 
   const clearAll = useCallback(() => {
     setDayMap((m) => {
       const next: DayTypeMap = { ...m };
-      for (const iso of isoDates) {
+      for (const iso of inputIsoDates) {
         next[iso] = "";
       }
       return next;
     });
-  }, [isoDates]);
+  }, [inputIsoDates]);
 
   const nameOptions = useMemo(() => staffOptionsForShop(shop), [shop]);
   const selectedCount = useMemo(() => {
-    return isoDates.filter((iso) => {
+    return inputIsoDates.filter((iso) => {
       const t = dayMap[iso];
       return t != null && t !== "";
     }).length;
-  }, [isoDates, dayMap]);
+  }, [inputIsoDates, dayMap]);
 
   const isoSet = useMemo(() => new Set(isoDates), [isoDates]);
 
@@ -150,7 +161,7 @@ export function MonthlyShiftBulkForm({
     setSubmitErr(null);
     setDayMap((prev) => {
       const next: DayTypeMap = { ...prev };
-      for (const iso of isoDates) {
+      for (const iso of inputIsoDates) {
         const forDay = allRows.filter((r) => r.shop === shop && r.date === iso);
         if (forDay.length === 0) {
           continue;
@@ -162,7 +173,7 @@ export function MonthlyShiftBulkForm({
     });
     setDayNotes((prev) => {
       const next: Record<string, string> = { ...prev };
-      for (const iso of isoDates) {
+      for (const iso of inputIsoDates) {
         const forDay = allRows.filter((r) => r.shop === shop && r.date === iso);
         if (forDay.length === 0) {
           continue;
@@ -171,7 +182,7 @@ export function MonthlyShiftBulkForm({
       }
       return next;
     });
-  }, [allRows, shop, isoDates]);
+  }, [allRows, shop, inputIsoDates]);
 
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
@@ -217,6 +228,13 @@ export function MonthlyShiftBulkForm({
           </span>
         </span>
       </div>
+
+      {closedInMonthCount > 0 ? (
+        <p className="mb-3 text-sm text-slate-600">
+          店舗休業日（<code className="rounded bg-slate-100 px-1">shop_holidays</code>）のため、この店舗では{" "}
+          <strong>{closedInMonthCount}日分</strong>は一括入力欄に表示しません。
+        </p>
+      ) : null}
 
       {hasExisting ? (
         <div
@@ -312,7 +330,7 @@ export function MonthlyShiftBulkForm({
       </div>
 
       <div className="max-h-[min(24rem,50vh)] space-y-2 overflow-y-auto rounded-xl border border-stone-100 bg-stone-50/60 p-2 sm:max-h-[32rem]">
-        {isoDates.map((iso) => {
+        {inputIsoDates.map((iso) => {
           const cur = (dayMap[iso] as ShiftType | "") ?? "";
           const tone = getCalDayToneFromIso(iso);
           const wkHoli = weekdayPublicHolidayLabel(iso);
@@ -406,7 +424,7 @@ export function MonthlyShiftBulkForm({
           const staff = staffName.trim() === "" ? null : staffName.trim();
           const globalN = noteAll.trim();
           const rows: ShiftRow[] = [];
-          for (const iso of isoDates) {
+          for (const iso of inputIsoDates) {
             const t = (dayMap[iso] as ShiftType | "") ?? "";
             if (t === "") {
               continue;

@@ -4,7 +4,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { SHOP_TAB_LABEL } from "@/lib/master";
 import { isHqStaff } from "@/lib/master";
-import type { ShopName, ShiftRow } from "@/lib/types";
+import { isShopClosedOn } from "@/lib/shopHolidays";
+import type { ShopHoliday, ShopName, ShiftRow } from "@/lib/types";
 import {
   addMonths,
   formatYearMonth,
@@ -30,6 +31,7 @@ type Props = {
   confirmingId?: string | null;
   onAddForDay?: (iso: string) => void;
   onEditRow?: (row: ShiftRow) => void;
+  shopHolidays: ShopHoliday[];
 };
 
 function typeShort(t: string) {
@@ -50,6 +52,7 @@ export function MonthlyShopCalendar({
   confirmingId,
   onAddForDay,
   onEditRow,
+  shopHolidays,
 }: Props) {
   const y = month.getFullYear();
   const m1 = month.getMonth() + 1;
@@ -125,6 +128,21 @@ export function MonthlyShopCalendar({
           }
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
+          const dayClosed = isShopClosedOn(shop, key, shopHolidays);
+          if (dayClosed) {
+            return (
+              <div
+                key={key}
+                className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 border border-slate-300 bg-slate-200/90 p-1 text-left"
+                aria-label="店舗休業日"
+              >
+                <div className="w-full text-[11px] font-semibold text-slate-500">{d.getDate()}</div>
+                <p className="w-full text-center text-[10px] font-bold leading-tight text-slate-800">
+                  店休
+                </p>
+              </div>
+            );
+          }
           const tone = getCalDayTone(d);
           const wkHoli = isHolidayForCalendarLabel(d);
           return (

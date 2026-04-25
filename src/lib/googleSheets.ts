@@ -1,7 +1,7 @@
 import { GoogleSpreadsheet, type GoogleSpreadsheetRow } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { SHOPS } from "./master";
-import type { ShiftRow, ShiftStatus, ShiftType, ShopName } from "./types";
+import type { ShiftRow, ShopHoliday, ShiftStatus, ShiftType, ShopName } from "./types";
 
 export const SHIFT_SHEET_HEADER = [
   "id",
@@ -407,4 +407,105 @@ export function shiftPatchFromRequestBody(data: unknown): {
     );
   }
   return patch;
+}
+
+export const SHOP_HOLIDAYS_SHEET_TITLE = "shop_holidays" as const;
+export const SHOP_HOLIDAYS_HEADER = ["date", "shop"] as const;
+
+/**
+ * タブ `shop_holidays` を取得。無ければ date / shop ヘッダーで新規作成する。
+ */
+export async function getOrCreateShopHolidaysWorksheet() {
+  const { sheetId } = readSheetEnv();
+  const doc = new GoogleSpreadsheet(sheetId, getJwt());
+  await doc.loadInfo();
+  let sheet = doc.sheetsByTitle[SHOP_HOLIDAYS_SHEET_TITLE];
+  if (!sheet) {
+    sheet = await doc.addSheet({ title: SHOP_HOLIDAYS_SHEET_TITLE });
+  }
+  await sheet.loadHeaderRow(1);
+  const emptyHeader =
+    !sheet.headerValues ||
+    sheet.headerValues.length === 0 ||
+    sheet.headerValues.every((h) => !String(h ?? "").trim());
+  if (emptyHeader) {
+    await sheet.setHeaderRow([...SHOP_HOLIDAYS_HEADER]);
+    await sheet.loadHeaderRow(1);
+  }
+  return sheet;
+}
+
+function rowToShopHoliday(
+  r: GoogleSpreadsheetRow<Record<string, string | number | boolean | null>>,
+): ShopHoliday | null {
+  const date = cellString(r.get("date"));
+  const shopRaw = cellString(r.get("shop"));
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !SHOP_SET.has(shopRaw)) {
+    return null;
+  }
+  return { date, shop: shopRaw as ShopName };
+}
+
+function dedupeShopHolidays(list: ShopHoliday[]): ShopHoliday[] {
+  const seen = new Set<string>();
+  const out: ShopHoliday[] = [];
+  for (const h of list) {
+    const k = `${h.date}\t${h.shop}`;
+    if (seen.has(k)) {
+      continue;
+    }
+    seen.add(k);
+    out.push(h);
+  }
+  return out;
+}
+
+export async function listShopHolidaysFromSheet(): Promise<ShopHoliday[]> {
+  const sheet = await getOrCreateShopHolidaysWorksheet();
+  const rows = await sheet.getRows();
+  const out: ShopHoliday[] = [];
+  for (const r of rows) {
+    const o = rowToShopHoliday(r);
+    if (o) {
+      out.push(o);
+    }
+  }
+  out.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) || a.shop.localeCompare(b.shop),
+  );
+  return dedupeShopHolidays(out);
+}
+
+/**
+ * 休業日1件を追記。同一 date+shop が既にあれば何も追加しない。
+ */
+export async function addShopHolidayToSheet(
+  h: ShopHoliday,
+): Promise<{ alreadyExists: boolean }> {
+  const sheet = await getOrCreateShopHolidaysWorksheet();
+  const rows = await sheet.getRows();
+  for (const r of rows) {
+    if (cellString(r.get("date")) === h.date && cellString(r.get("shop")) === h.shop) {
+      return { alreadyExists: true };
+    }
+  }
+  await sheet.addRow({ date: h.date, shop: h.shop });
+  return { alreadyExists: false };
+}
+
+export async function deleteShopHolidayInSheet(
+  h: ShopHoliday,
+): Promise<{ deleted: boolean }> {
+  const sheet = await getOrCreateShopHolidaysWorksheet();
+  const rows = await sheet.getRows();
+  for (const r of rows) {
+    const date = cellString(r.get("date"));
+    const shopRaw = cellString(r.get("shop"));
+    if (date === h.date && shopRaw === h.shop) {
+      await r.delete();
+      return { deleted: true };
+    }
+  }
+  return { deleted: false };
 }

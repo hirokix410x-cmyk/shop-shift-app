@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
-import type { ShiftRow } from "@/lib/types";
+import type { ShiftRow, ShopHoliday } from "@/lib/types";
 import { addDays, startOfMonth, startOfWindow, toISODateString } from "@/lib/dateUtils";
 import { ShiftBoard } from "./ShiftBoard";
 import { MonthlyShopCalendar } from "./MonthlyShopCalendar";
 import { MonthlyShiftBulkForm } from "./MonthlyShiftBulkForm";
 import { ShiftFormModal, type FormContext } from "./ShiftFormModal";
+import { ShopHolidayAdminPanel } from "./ShopHolidayAdminPanel";
 import type { ShopName } from "@/lib/types";
 
 function today(): Date {
@@ -96,6 +97,21 @@ async function fetchShiftsFromApi(): Promise<
   return { ok: true, shifts: (data as { shifts: ShiftRow[] }).shifts };
 }
 
+async function loadShopHolidaysFromApi(): Promise<ShopHoliday[]> {
+  const res = await fetch("/api/shop-holidays", { cache: "no-store" });
+  const text = await res.text();
+  let data: { holidays?: unknown };
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    return [];
+  }
+  if (!res.ok || !Array.isArray(data.holidays)) {
+    return [];
+  }
+  return data.holidays as ShopHoliday[];
+}
+
 type BoardView = "week" | "month";
 
 export function ShiftApp() {
@@ -112,6 +128,11 @@ export function ShiftApp() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
   const [saveError, setSaveError] = useState<ApiErrorDisplay | null>(null);
+  const [shopHolidays, setShopHolidays] = useState<ShopHoliday[]>([]);
+
+  const refetchShopHolidays = useCallback(async () => {
+    setShopHolidays(await loadShopHolidaysFromApi());
+  }, []);
 
   const refetch = useCallback(async () => {
     const r = await fetchShiftsFromApi();
@@ -124,6 +145,7 @@ export function ShiftApp() {
     }
     setRows(r.shifts);
     setLoadError(null);
+    setShopHolidays(await loadShopHolidaysFromApi());
   }, []);
 
   useEffect(() => {
@@ -139,6 +161,7 @@ export function ShiftApp() {
         setLoadError(r.display);
       } else {
         setRows(r.shifts);
+        setShopHolidays(await loadShopHolidaysFromApi());
       }
       setLoading(false);
     })();
@@ -317,9 +340,15 @@ export function ShiftApp() {
               checked={adminMode}
               onChange={(e) => setAdminMode(e.target.checked)}
             />
-            管理者：確定モード（希望行に「確定」ボタンを表示）
+            管理者：確定モード（希望行に「確定」ボタンを表示）・店舗休業日の登録
           </label>
         </div>
+        {adminMode ? (
+          <ShopHolidayAdminPanel
+            holidays={shopHolidays}
+            onAfterChange={refetchShopHolidays}
+          />
+        ) : null}
       </header>
 
       {loadError ? <ErrorCallout detail={loadError} /> : null}
@@ -335,6 +364,7 @@ export function ShiftApp() {
         onSubmitBulk={handleBulkSubmit}
         submitDisabled={loading}
         allRows={rows}
+        shopHolidays={shopHolidays}
       />
 
       <div className="border-t border-stone-200 pt-6" />
@@ -380,6 +410,7 @@ export function ShiftApp() {
           confirmingId={confirmingId}
           onAddForDay={openNew}
           onEditRow={openEdit}
+          shopHolidays={shopHolidays}
         />
       ) : (
         <div className="space-y-4">
@@ -411,6 +442,7 @@ export function ShiftApp() {
             confirmingId={confirmingId}
             onAddForDay={(iso) => openNew(iso, monthTabShop)}
             onEditRow={openEdit}
+            shopHolidays={shopHolidays}
           />
         </div>
       )}
