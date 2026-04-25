@@ -98,6 +98,22 @@ function httpStatusFromUnknown(e: unknown): number | undefined {
       if (r?.status != null) return r.status;
     }
   }
+  if (e instanceof Error) {
+    const br = e.message.match(/\[(\d{3})\]/);
+    if (br) {
+      const n = parseInt(br[1], 10);
+      if (n >= 100 && n < 600) {
+        return n;
+      }
+    }
+    if (
+      /Quota exceeded|rateLimitExceeded|Too Many Requests|RESOURCE_EXHAUSTED|User-rate limit exceeded/i.test(
+        e.message,
+      )
+    ) {
+      return 429;
+    }
+  }
   return undefined;
 }
 
@@ -245,6 +261,24 @@ export function toClientSheetErrorPayload(
         error: msg || "認証に失敗しました (401)",
         errorCode: "GOOGLE_AUTH_401",
         hint: "GOOGLE_SERVICE_ACCOUNT_EMAIL と GOOGLE_PRIVATE_KEY が同一サービスアカウントの組か確認してください。",
+      },
+    };
+  }
+
+  if (
+    http === 429 ||
+    /Quota exceeded|RESOURCE_EXHAUSTED|rate limit|Too many requests|User-rate limit/i.test(msg)
+  ) {
+    return {
+      status: 429,
+      payload: {
+        error:
+          msg && msg.length < 600
+            ? msg
+            : "Google Sheets API の利用上限（429: Read 回数/分 など）に達しました。",
+        errorCode: "GOOGLE_API_429",
+        hint:
+          "短時間のリロードが続くと起きます。1分ほど待ってから再読み込みしてください。一覧の取得はサーバー側で短い間隔キャッシュします（環境変数 SHIFTS_LIST_CACHE_TTL_MS）。Google Cloud コンソール（APIs & Services）で Sheets API の Quotas 引き上げも可能です。",
       },
     };
   }

@@ -123,13 +123,38 @@ export async function getShiftsWorksheet() {
   return sheet;
 }
 
-export async function listShiftsFromSheet(): Promise<ShiftRow[]> {
+type ListCache = { exp: number; data: ShiftRow[] };
+
+let shiftsListCache: ListCache | null = null;
+
+function getShiftsListCacheTtlMs(): number {
+  const raw = process.env.SHIFTS_LIST_CACHE_TTL_MS;
+  if (raw === "0" || raw === "false") {
+    return 0;
+  }
+  if (raw == null || raw === "") {
+    return 20_000;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) {
+    return 20_000;
+  }
+  return n;
+}
+
+function invalidateShiftsListCache(): void {
+  shiftsListCache = null;
+}
+
+async function loadShiftsFromSheetOnce(): Promise<ShiftRow[]> {
   const sheet = await getShiftsWorksheet();
   const rows = await sheet.getRows();
   const out: ShiftRow[] = [];
   for (const r of rows) {
     const s = parseRowToShift(r);
-    if (s) out.push(s);
+    if (s) {
+      out.push(s);
+    }
   }
   out.sort(
     (a, b) =>
@@ -138,15 +163,38 @@ export async function listShiftsFromSheet(): Promise<ShiftRow[]> {
   return out;
 }
 
+/**
+ * 同一サーバープロセス内で短時間キャッシュ（既定 20 秒）し、GET の連打時の
+ * Sheets 読み取り 429 発生を抑える。書き込み成功後は必ず無効化する。
+ * `SHIFTS_LIST_CACHE_TTL_MS=0` で無効化可能。
+ */
+export async function listShiftsFromSheet(): Promise<ShiftRow[]> {
+  const ttl = getShiftsListCacheTtlMs();
+  if (ttl === 0) {
+    return loadShiftsFromSheetOnce();
+  }
+  const now = Date.now();
+  if (shiftsListCache && now < shiftsListCache.exp) {
+    return shiftsListCache.data;
+  }
+  const data = await loadShiftsFromSheetOnce();
+  shiftsListCache = { exp: now + ttl, data };
+  return data;
+}
+
 export async function appendShiftToSheet(shift: ShiftRow): Promise<void> {
   const sheet = await getShiftsWorksheet();
   await sheet.addRow(shiftToRecord(shift));
+  invalidateShiftsListCache();
 }
 
 export async function appendShiftsToSheet(shifts: ShiftRow[]): Promise<void> {
-  if (shifts.length === 0) return;
+  if (shifts.length === 0) {
+    return;
+  }
   const sheet = await getShiftsWorksheet();
   await sheet.addRows(shifts.map(shiftToRecord));
+  invalidateShiftsListCache();
 }
 
 /**
@@ -188,6 +236,7 @@ export async function updateShiftByIdInSheet(
       r.set("staff_name", patch.staff_name ?? "");
     }
     await r.save();
+    invalidateShiftsListCache();
     return;
   }
   throw new Error(`該当する行が見つかりません (id: ${id})`);
