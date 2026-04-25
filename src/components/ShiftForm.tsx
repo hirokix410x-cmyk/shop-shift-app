@@ -9,10 +9,12 @@ const TYPES: ShiftType[] = ["全日", "午前", "午後", "イレギュラー"];
 const STATUS_OPTIONS: ShiftStatus[] = ["希望", "確定"];
 
 type Props = {
-  onSubmitRow: (row: ShiftRow) => void;
+  onSubmitRow: (row: ShiftRow) => void | Promise<void>;
+  /** 初期読み込み中は送信を防ぐ */
+  submitDisabled?: boolean;
 };
 
-export function ShiftForm({ onSubmitRow }: Props) {
+export function ShiftForm({ onSubmitRow, submitDisabled }: Props) {
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
   const [staffName, setStaffName] = useState<string>("");
   const [dateStr, setDateStr] = useState(() => {
@@ -23,6 +25,7 @@ export function ShiftForm({ onSubmitRow }: Props) {
   const [type, setType] = useState<ShiftType>("全日");
   const [status, setStatus] = useState<ShiftStatus>("希望");
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const nameOptions = useMemo(() => staffOptionsForShop(shop), [shop]);
 
@@ -30,25 +33,32 @@ export function ShiftForm({ onSubmitRow }: Props) {
     <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-stone-800">
         <ClipboardList className="h-5 w-5 text-stone-500" />
-        シフトを登録（モック）
+        シフトを登録
       </h2>
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           const id =
             typeof crypto !== "undefined" && crypto.randomUUID
               ? crypto.randomUUID()
               : `r-${Date.now()}`;
-          onSubmitRow({
-            id,
-            date: dateStr,
-            shop,
-            staff_name: staffName.trim() === "" ? null : staffName.trim(),
-            type,
-            status,
-            note: note.trim(),
-          });
+          setSaving(true);
+          try {
+            await Promise.resolve(
+              onSubmitRow({
+                id,
+                date: dateStr,
+                shop,
+                staff_name: staffName.trim() === "" ? null : staffName.trim(),
+                type,
+                status,
+                note: note.trim(),
+              }),
+            );
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <div className="space-y-1.5">
@@ -161,9 +171,10 @@ export function ShiftForm({ onSubmitRow }: Props) {
 
         <button
           type="submit"
-          className="min-h-[52px] w-full rounded-xl bg-amber-600 text-base font-semibold text-white shadow-sm active:bg-amber-700"
+          disabled={saving || submitDisabled}
+          className="min-h-[52px] w-full rounded-xl bg-amber-600 text-base font-semibold text-white shadow-sm enabled:active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          リストに反映（クライアントのみ）
+          {saving ? "スプレッドシートに保存中…" : "スプレッドシートに保存"}
         </button>
       </form>
     </section>
