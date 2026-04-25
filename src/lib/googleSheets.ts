@@ -414,14 +414,22 @@ export const SHOP_HOLIDAYS_HEADER = ["date", "shop"] as const;
 
 /**
  * タブ `shop_holidays` を取得。無ければ date / shop ヘッダーで新規作成する。
+ * 1行目が空のまま getRows 等を呼ぶと "No values in the header row" になるため、
+ * 新規タブの場合は先に setHeaderRow してから loadHeaderRow する。
  */
 export async function getOrCreateShopHolidaysWorksheet() {
   const { sheetId } = readSheetEnv();
   const doc = new GoogleSpreadsheet(sheetId, getJwt());
   await doc.loadInfo();
   let sheet = doc.sheetsByTitle[SHOP_HOLIDAYS_SHEET_TITLE];
+  const created = !sheet;
   if (!sheet) {
     sheet = await doc.addSheet({ title: SHOP_HOLIDAYS_SHEET_TITLE });
+  }
+  if (created) {
+    await sheet.setHeaderRow([...SHOP_HOLIDAYS_HEADER]);
+    await sheet.loadHeaderRow(1);
+    return sheet;
   }
   await sheet.loadHeaderRow(1);
   const emptyHeader =
@@ -430,7 +438,16 @@ export async function getOrCreateShopHolidaysWorksheet() {
     sheet.headerValues.every((h) => !String(h ?? "").trim());
   if (emptyHeader) {
     await sheet.setHeaderRow([...SHOP_HOLIDAYS_HEADER]);
-    await sheet.loadHeaderRow(1);
+  }
+  await sheet.loadHeaderRow(1);
+  if (
+    !sheet.headerValues ||
+    sheet.headerValues.length === 0 ||
+    sheet.headerValues.every((h) => !String(h ?? "").trim())
+  ) {
+    throw new Error(
+      "shop_holidays シートの1行目に date / shop のヘッダーが置けません。手動で1行目に date と shop を入力するか、空の shop_holidays タブを削除して再試行してください。",
+    );
   }
   return sheet;
 }
