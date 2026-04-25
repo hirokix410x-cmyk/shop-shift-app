@@ -233,6 +233,15 @@ export function ShiftApp() {
     [rows],
   );
 
+  /** 個人別の「＋」: 1店舗タブ＝その店。2店舗タブ＝最後に選んだ単一店（`personAddShop`） */
+  const personAddTargetShop = useMemo(
+    () =>
+      personViewShopFilter === "all"
+        ? personAddShop
+        : personViewShopFilter,
+    [personViewShopFilter, personAddShop],
+  );
+
   const inWindow = useMemo(() => {
     const s = startOfWindow(weekAnchor);
     const end = addDays(s, 6);
@@ -745,8 +754,7 @@ export function ShiftApp() {
               onMonthChange={setMonthCursor}
               rows={rows}
               viewShopFilter={personViewShopFilter}
-              addSlotShop={personAddShop}
-              onAddSlotShopChange={setPersonAddShop}
+              addSlotShop={personAddTargetShop}
               adminMode={adminMode}
               onConfirmRow={adminMode ? onConfirmRow : undefined}
               confirmingId={confirmingId}

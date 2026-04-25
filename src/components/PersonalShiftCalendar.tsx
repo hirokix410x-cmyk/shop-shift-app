@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
-import { SHOPS, SHOP_TAB_LABEL, isHqStaff } from "@/lib/master";
+import { SHOP_TAB_LABEL, isHqStaff } from "@/lib/master";
 import type { ShopName, ShiftRow } from "@/lib/types";
 import {
   addMonths,
@@ -37,9 +37,8 @@ type Props = {
   rows: ShiftRow[];
   /** 表示する店舗（両店 / 1店舗） */
   viewShopFilter: PersonViewShopFilter;
-  /** 「＋」で開く新規枠の店舗 */
+  /** 「＋」で入れる枠の店舗（親がタブに合わせて渡す） */
   addSlotShop: ShopName;
-  onAddSlotShopChange: (s: ShopName) => void;
   adminMode: boolean;
   onConfirmRow?: (id: string) => void | Promise<void>;
   confirmingId?: string | null;
@@ -54,7 +53,6 @@ export function PersonalShiftCalendar({
   rows,
   viewShopFilter,
   addSlotShop,
-  onAddSlotShopChange,
   adminMode,
   onConfirmRow,
   confirmingId,
@@ -141,22 +139,6 @@ export function PersonalShiftCalendar({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <p className="text-xs text-stone-500">新規枠（＋）を入れる店舗:</p>
-        <select
-          className="min-h-[40px] max-w-md rounded-lg border border-stone-200 bg-stone-50 px-2 text-sm"
-          value={addSlotShop}
-          onChange={(e) => onAddSlotShopChange(e.target.value as ShopName)}
-          aria-label="新規枠の店舗"
-        >
-          {SHOPS.map((s) => (
-            <option key={s} value={s}>
-              {SHOP_TAB_LABEL[s] ?? s}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 text-center text-xs">
         {WEEKDAYS.map((w, wi) => (
           <div
@@ -203,7 +185,7 @@ export function PersonalShiftCalendar({
                     type="button"
                     onClick={() => onAddForDay(key, addSlotShop)}
                     className="shrink-0 rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-950"
-                    title="この日の枠を追加"
+                    title={`${SHOP_TAB_LABEL[addSlotShop] ?? addSlotShop}に枠を追加`}
                   >
                     ＋
                   </button>
