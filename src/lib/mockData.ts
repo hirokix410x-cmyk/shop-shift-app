@@ -1,0 +1,58 @@
+import type { ShiftRow } from "./types";
+
+export const initialMockShifts: ShiftRow[] = [
+  {
+    id: "m1",
+    date: "2026-04-23",
+    shop: "中村学園大学前店",
+    staff_name: "福田",
+    type: "午前",
+    note: "",
+    status: "確定",
+  },
+  {
+    id: "m2",
+    date: "2026-04-23",
+    shop: "中村学園大学前店",
+    staff_name: null,
+    type: "午後",
+    note: "急募",
+    status: "希望",
+  },
+  {
+    id: "m3",
+    date: "2026-04-24",
+    shop: "九産大店",
+    staff_name: "大角",
+    type: "全日",
+    note: "社員カバー",
+    status: "確定",
+  },
+  {
+    id: "m4",
+    date: "2026-04-25",
+    shop: "中村学園大学前店",
+    staff_name: "スタッフA",
+    type: "全日",
+    note: "",
+    status: "希望",
+  },
+  {
+    id: "m5",
+    date: "2026-04-25",
+    shop: "九産大店",
+    staff_name: null,
+    type: "午前",
+    note: "レジ",
+    status: "希望",
+  },
+  {
+    id: "m6",
+    date: "2026-04-25",
+    shop: "九産大店",
+    staff_name: "平田",
+    type: "イレギュラー",
+    note: "17–20時",
+    status: "確定",
+  },
+];
