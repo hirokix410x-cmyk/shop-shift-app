@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  addShopHolidayToSheet,
-  deleteShopHolidayInSheet,
-  listShopHolidaysFromSheet,
+  addShopDayOverrideToSheet,
+  deleteShopDayOverrideInSheet,
+  listShopDayOverridesFromSheet,
 } from "@/lib/googleSheets";
 import { toClientSheetErrorPayload } from "@/lib/sheetConnectionLog";
 import { SHOPS } from "@/lib/master";
@@ -22,12 +22,12 @@ function jsonError(
 
 export async function GET() {
   try {
-    const holidays = await listShopHolidaysFromSheet();
-    return NextResponse.json({ holidays });
+    const overrides = await listShopDayOverridesFromSheet();
+    return NextResponse.json({ overrides });
   } catch (e) {
     const { status, payload } = toClientSheetErrorPayload(
       e,
-      "店舗休業日の読み込みに失敗しました",
+      "店舗営業・休業の例外一覧の読み込みに失敗しました",
     );
     return jsonError(status, payload);
   }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     return jsonError(400, { error: "shop が正しくありません", errorCode: "VALIDATION" });
   }
   try {
-    const { alreadyExists } = await addShopHolidayToSheet({
+    const { alreadyExists } = await addShopDayOverrideToSheet({
       date,
       shop: shop as ShopName,
     });
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   } catch (e) {
     const { status, payload } = toClientSheetErrorPayload(
       e,
-      "店舗休業日の登録に失敗しました",
+      "例外行の登録に失敗しました",
     );
     return jsonError(status, payload);
   }
@@ -81,18 +81,18 @@ export async function DELETE(request: Request) {
     return jsonError(400, { error: "クエリ shop が正しくありません", errorCode: "VALIDATION" });
   }
   try {
-    const { deleted } = await deleteShopHolidayInSheet({
+    const { deleted } = await deleteShopDayOverrideInSheet({
       date,
       shop: shop as ShopName,
     });
     if (!deleted) {
-      return jsonError(404, { error: "該当する休業日がありません", errorCode: "NOT_FOUND" });
+      return jsonError(404, { error: "該当する行がありません", errorCode: "NOT_FOUND" });
     }
     return NextResponse.json({ ok: true, deleted: true });
   } catch (e) {
     const { status, payload } = toClientSheetErrorPayload(
       e,
-      "店舗休業日の削除に失敗しました",
+      "例外行の削除に失敗しました",
     );
     return jsonError(status, payload);
   }

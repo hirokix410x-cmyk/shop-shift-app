@@ -4,8 +4,12 @@ import { Calendar, ChevronLeft, ChevronRight, MapPin, User } from "lucide-react"
 import { useMemo } from "react";
 import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
 import { rowCardClassName } from "@/lib/shiftStyle";
-import { isShopClosedOn } from "@/lib/shopHolidays";
-import type { ShopHoliday, ShiftRow, ShopName } from "@/lib/types";
+import {
+  isSpecialClosedDay,
+  isSpecialOperatingDay,
+  isStoreClosed,
+} from "@/lib/shopOperatingDay";
+import type { ShopDayOverride, ShiftRow, ShopName } from "@/lib/types";
 import { isHqStaff } from "@/lib/master";
 import {
   addDays,
@@ -24,8 +28,8 @@ type Props = {
   confirmingId?: string | null;
   onAddForDay?: (date: string, shop: ShopName) => void;
   onEditRow?: (row: ShiftRow) => void;
-  /** 店舗休業日（週内の該当店舗枠を閉店表示に） */
-  shopHolidays: ShopHoliday[];
+  /** 営業・休業の例外行（土日祝=特別営業、平日=特別休） */
+  shopDayOverrides: ShopDayOverride[];
 };
 
 function formatWeekday(d: Date) {
@@ -41,7 +45,7 @@ export function ShiftBoard({
   confirmingId,
   onAddForDay,
   onEditRow,
-  shopHolidays,
+  shopDayOverrides,
 }: Props) {
   const windowStart = startOfWindow(anchor);
   const windowEnd = useMemo(() => addDays(windowStart, 6), [windowStart]);
@@ -82,7 +86,9 @@ export function ShiftBoard({
             日付帯: <span className="text-blue-800">土</span>＝青、
             <span className="text-red-700">日祝</span>＝薄赤
           </p>
-          <p className="text-xs text-stone-500">先頭の日＝起算日（初回は今日から7日）。前後ボタンで7日ずつ移動。</p>
+          <p className="text-xs text-stone-500">
+            先頭の日＝起算日（初回は今日から7日）。土日祝は原則休（登録で特別営業）。平日(祝外)は原則営（登録で特別休）。
+          </p>
         </div>
         <div className="flex items-center justify-center gap-2">
           <button
@@ -159,28 +165,39 @@ export function ShiftBoard({
               <div className="grid gap-4 p-4 sm:grid-cols-2">
                 {SHOPS.map((shop) => {
                   const shopRows = list.filter((r) => r.shop === shop);
-                  const closed = isShopClosedOn(shop, key, shopHolidays);
+                  const closed = isStoreClosed(shop, key, shopDayOverrides);
                   if (closed) {
+                    const specC = isSpecialClosedDay(shop, key, shopDayOverrides);
                     return (
                       <div
                         key={shop}
                         className="flex min-h-[8rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-100/90 p-4 text-center shadow-inner"
-                        aria-label={`${shop} 店舗休業日`}
+                        aria-label={specC ? "特別休業" : "店舗休業日"}
                       >
-                        <p className="text-lg font-bold text-slate-700">店舗休業日</p>
+                        <p className="text-lg font-bold text-slate-700">
+                          {specC ? "特別休業" : "店舗休業日"}
+                        </p>
                         <p className="mt-0.5 text-xs text-slate-500">{SHOP_TAB_LABEL[shop] ?? shop}</p>
-                        <p className="mt-1 text-xs text-slate-500">募集枠の登録は不要です</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {specC ? "登録した平日の臨時休み" : "土日祝の休み日（営業は管理者で特別営業登録）"}
+                        </p>
                       </div>
                     );
                   }
+                  const specOpen = isSpecialOperatingDay(shop, key, shopDayOverrides);
                   return (
                     <div
                       key={shop}
                       className="rounded-xl border border-stone-100 bg-white p-3 shadow-sm"
                     >
-                      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-stone-800">
+                      <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-stone-800">
                         <MapPin className="h-4 w-4 shrink-0 text-amber-600" />
                         {shop}
+                        {specOpen ? (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+                            特別営業
+                          </span>
+                        ) : null}
                       </h3>
                       {shopRows.length === 0 ? (
                         <div className="space-y-2">

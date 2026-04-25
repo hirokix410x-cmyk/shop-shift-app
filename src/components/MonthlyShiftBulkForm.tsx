@@ -3,8 +3,8 @@
 import { CalendarRange } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
-import { isShopClosedOn } from "@/lib/shopHolidays";
-import type { ShopHoliday, ShopName, ShiftRow, ShiftType } from "@/lib/types";
+import { isStoreClosed } from "@/lib/shopOperatingDay";
+import type { ShopDayOverride, ShopName, ShiftRow, ShiftType } from "@/lib/types";
 import { addMonths, getDaysInMonth, startOfMonth, toISODateString } from "@/lib/dateUtils";
 import {
   dayRowSurfaceClass,
@@ -28,8 +28,8 @@ type Props = {
   submitDisabled?: boolean;
   /** 重複案内・取り込み用の既存シフト行 */
   allRows: ShiftRow[];
-  /** 店舗休業日（該当する日の行を除外） */
-  shopHolidays: ShopHoliday[];
+  /** 実効で店舗休業となる日（土日祝デフォ休・平日の特別休）の行を一括フォームから除外 */
+  shopDayOverrides: ShopDayOverride[];
 };
 
 function todayNoon(): Date {
@@ -52,7 +52,7 @@ export function MonthlyShiftBulkForm({
   onSubmitBulk,
   submitDisabled,
   allRows,
-  shopHolidays,
+  shopDayOverrides,
 }: Props) {
   const listId = useId();
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
@@ -83,10 +83,10 @@ export function MonthlyShiftBulkForm({
     return out;
   }, [year, month1, daysInMonth]);
 
-  /** 一括対象: 店舗休業日の日付は行を出さない */
+  /** 一括対象: 実際に休業日となる日付は行を出さない */
   const inputIsoDates = useMemo(
-    () => isoDates.filter((iso) => !isShopClosedOn(shop, iso, shopHolidays)),
-    [isoDates, shop, shopHolidays],
+    () => isoDates.filter((iso) => !isStoreClosed(shop, iso, shopDayOverrides)),
+    [isoDates, shop, shopDayOverrides],
   );
   const closedInMonthCount = isoDates.length - inputIsoDates.length;
 
@@ -231,7 +231,8 @@ export function MonthlyShiftBulkForm({
 
       {closedInMonthCount > 0 ? (
         <p className="mb-3 text-sm text-slate-600">
-          店舗休業日（<code className="rounded bg-slate-100 px-1">shop_holidays</code>）のため、この店舗では{" "}
+          営業ルール上この店舗は休み（土日祝のデフォ休・平日の特別休。シート{" "}
+          <code className="rounded bg-slate-100 px-1">shop_operating_days</code>）のため、{" "}
           <strong>{closedInMonthCount}日分</strong>は一括入力欄に表示しません。
         </p>
       ) : null}

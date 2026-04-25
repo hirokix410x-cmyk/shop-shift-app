@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
-import type { ShiftRow, ShopHoliday } from "@/lib/types";
+import type { ShiftRow, ShopDayOverride } from "@/lib/types";
 import { addDays, startOfMonth, startOfWindow, toISODateString } from "@/lib/dateUtils";
 import { ShiftBoard } from "./ShiftBoard";
 import { MonthlyShopCalendar } from "./MonthlyShopCalendar";
 import { MonthlyShiftBulkForm } from "./MonthlyShiftBulkForm";
 import { ShiftFormModal, type FormContext } from "./ShiftFormModal";
-import { ShopHolidayAdminPanel } from "./ShopHolidayAdminPanel";
+import { ShopOperatingDayPanel } from "./ShopOperatingDayPanel";
 import type { ShopName } from "@/lib/types";
 
 function today(): Date {
@@ -97,19 +97,19 @@ async function fetchShiftsFromApi(): Promise<
   return { ok: true, shifts: (data as { shifts: ShiftRow[] }).shifts };
 }
 
-async function loadShopHolidaysFromApi(): Promise<ShopHoliday[]> {
-  const res = await fetch("/api/shop-holidays", { cache: "no-store" });
+async function loadShopDayOverridesFromApi(): Promise<ShopDayOverride[]> {
+  const res = await fetch("/api/shop-operating-days", { cache: "no-store" });
   const text = await res.text();
-  let data: { holidays?: unknown };
+  let data: { overrides?: unknown };
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
     return [];
   }
-  if (!res.ok || !Array.isArray(data.holidays)) {
+  if (!res.ok || !Array.isArray(data.overrides)) {
     return [];
   }
-  return data.holidays as ShopHoliday[];
+  return data.overrides as ShopDayOverride[];
 }
 
 type BoardView = "week" | "month";
@@ -128,10 +128,10 @@ export function ShiftApp() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
   const [saveError, setSaveError] = useState<ApiErrorDisplay | null>(null);
-  const [shopHolidays, setShopHolidays] = useState<ShopHoliday[]>([]);
+  const [shopDayOverrides, setShopDayOverrides] = useState<ShopDayOverride[]>([]);
 
-  const refetchShopHolidays = useCallback(async () => {
-    setShopHolidays(await loadShopHolidaysFromApi());
+  const refetchShopDayOverrides = useCallback(async () => {
+    setShopDayOverrides(await loadShopDayOverridesFromApi());
   }, []);
 
   const refetch = useCallback(async () => {
@@ -145,7 +145,7 @@ export function ShiftApp() {
     }
     setRows(r.shifts);
     setLoadError(null);
-    setShopHolidays(await loadShopHolidaysFromApi());
+    setShopDayOverrides(await loadShopDayOverridesFromApi());
   }, []);
 
   useEffect(() => {
@@ -161,7 +161,7 @@ export function ShiftApp() {
         setLoadError(r.display);
       } else {
         setRows(r.shifts);
-        setShopHolidays(await loadShopHolidaysFromApi());
+        setShopDayOverrides(await loadShopDayOverridesFromApi());
       }
       setLoading(false);
     })();
@@ -340,13 +340,13 @@ export function ShiftApp() {
               checked={adminMode}
               onChange={(e) => setAdminMode(e.target.checked)}
             />
-            管理者：確定モード（希望行に「確定」ボタンを表示）・店舗休業日の登録
+            管理者：確定モード（希望行に「確定」ボタンを表示）・店舗営業・休業の登録
           </label>
         </div>
         {adminMode ? (
-          <ShopHolidayAdminPanel
-            holidays={shopHolidays}
-            onAfterChange={refetchShopHolidays}
+          <ShopOperatingDayPanel
+            overrides={shopDayOverrides}
+            onAfterChange={refetchShopDayOverrides}
           />
         ) : null}
       </header>
@@ -364,7 +364,7 @@ export function ShiftApp() {
         onSubmitBulk={handleBulkSubmit}
         submitDisabled={loading}
         allRows={rows}
-        shopHolidays={shopHolidays}
+        shopDayOverrides={shopDayOverrides}
       />
 
       <div className="border-t border-stone-200 pt-6" />
@@ -410,7 +410,7 @@ export function ShiftApp() {
           confirmingId={confirmingId}
           onAddForDay={openNew}
           onEditRow={openEdit}
-          shopHolidays={shopHolidays}
+          shopDayOverrides={shopDayOverrides}
         />
       ) : (
         <div className="space-y-4">
@@ -442,7 +442,7 @@ export function ShiftApp() {
             confirmingId={confirmingId}
             onAddForDay={(iso) => openNew(iso, monthTabShop)}
             onEditRow={openEdit}
-            shopHolidays={shopHolidays}
+            shopDayOverrides={shopDayOverrides}
           />
         </div>
       )}

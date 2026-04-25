@@ -1,7 +1,7 @@
 import { GoogleSpreadsheet, type GoogleSpreadsheetRow } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { SHOPS } from "./master";
-import type { ShiftRow, ShopHoliday, ShiftStatus, ShiftType, ShopName } from "./types";
+import type { ShiftRow, ShopDayOverride, ShiftStatus, ShiftType, ShopName } from "./types";
 
 export const SHIFT_SHEET_HEADER = [
   "id",
@@ -409,25 +409,24 @@ export function shiftPatchFromRequestBody(data: unknown): {
   return patch;
 }
 
-export const SHOP_HOLIDAYS_SHEET_TITLE = "shop_holidays" as const;
-export const SHOP_HOLIDAYS_HEADER = ["date", "shop"] as const;
+export const SHOP_OPERATING_DAYS_SHEET_TITLE = "shop_operating_days" as const;
+export const SHOP_OPERATING_DAYS_HEADER = ["date", "shop"] as const;
 
 /**
- * タブ `shop_holidays` を取得。無ければ date / shop ヘッダーで新規作成する。
- * 1行目が空のまま getRows 等を呼ぶと "No values in the header row" になるため、
- * 新規タブの場合は先に setHeaderRow してから loadHeaderRow する。
+ * タブ `shop_operating_days`（店舗×日付の例外: 土日祝は特別営業、平日祝外は特別休み）。
+ * 1行目が空のまま行操作不可のため、新規タブは先に setHeaderRow。
  */
-export async function getOrCreateShopHolidaysWorksheet() {
+export async function getOrCreateShopOperatingDaysWorksheet() {
   const { sheetId } = readSheetEnv();
   const doc = new GoogleSpreadsheet(sheetId, getJwt());
   await doc.loadInfo();
-  let sheet = doc.sheetsByTitle[SHOP_HOLIDAYS_SHEET_TITLE];
+  let sheet = doc.sheetsByTitle[SHOP_OPERATING_DAYS_SHEET_TITLE];
   const created = !sheet;
   if (!sheet) {
-    sheet = await doc.addSheet({ title: SHOP_HOLIDAYS_SHEET_TITLE });
+    sheet = await doc.addSheet({ title: SHOP_OPERATING_DAYS_SHEET_TITLE });
   }
   if (created) {
-    await sheet.setHeaderRow([...SHOP_HOLIDAYS_HEADER]);
+    await sheet.setHeaderRow([...SHOP_OPERATING_DAYS_HEADER]);
     await sheet.loadHeaderRow(1);
     return sheet;
   }
@@ -437,7 +436,7 @@ export async function getOrCreateShopHolidaysWorksheet() {
     sheet.headerValues.length === 0 ||
     sheet.headerValues.every((h) => !String(h ?? "").trim());
   if (emptyHeader) {
-    await sheet.setHeaderRow([...SHOP_HOLIDAYS_HEADER]);
+    await sheet.setHeaderRow([...SHOP_OPERATING_DAYS_HEADER]);
   }
   await sheet.loadHeaderRow(1);
   if (
@@ -446,15 +445,15 @@ export async function getOrCreateShopHolidaysWorksheet() {
     sheet.headerValues.every((h) => !String(h ?? "").trim())
   ) {
     throw new Error(
-      "shop_holidays シートの1行目に date / shop のヘッダーが置けません。手動で1行目に date と shop を入力するか、空の shop_holidays タブを削除して再試行してください。",
+      "shop_operating_days シートの1行目に date / shop のヘッダーが置けません。手動で1行目に date と shop を入力するか、空のタブを削除して再試行してください。",
     );
   }
   return sheet;
 }
 
-function rowToShopHoliday(
+function rowToShopDayOverride(
   r: GoogleSpreadsheetRow<Record<string, string | number | boolean | null>>,
-): ShopHoliday | null {
+): ShopDayOverride | null {
   const date = cellString(r.get("date"));
   const shopRaw = cellString(r.get("shop"));
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !SHOP_SET.has(shopRaw)) {
@@ -463,9 +462,9 @@ function rowToShopHoliday(
   return { date, shop: shopRaw as ShopName };
 }
 
-function dedupeShopHolidays(list: ShopHoliday[]): ShopHoliday[] {
+function dedupeOverrides(list: ShopDayOverride[]): ShopDayOverride[] {
   const seen = new Set<string>();
-  const out: ShopHoliday[] = [];
+  const out: ShopDayOverride[] = [];
   for (const h of list) {
     const k = `${h.date}\t${h.shop}`;
     if (seen.has(k)) {
@@ -477,12 +476,12 @@ function dedupeShopHolidays(list: ShopHoliday[]): ShopHoliday[] {
   return out;
 }
 
-export async function listShopHolidaysFromSheet(): Promise<ShopHoliday[]> {
-  const sheet = await getOrCreateShopHolidaysWorksheet();
+export async function listShopDayOverridesFromSheet(): Promise<ShopDayOverride[]> {
+  const sheet = await getOrCreateShopOperatingDaysWorksheet();
   const rows = await sheet.getRows();
-  const out: ShopHoliday[] = [];
+  const out: ShopDayOverride[] = [];
   for (const r of rows) {
-    const o = rowToShopHoliday(r);
+    const o = rowToShopDayOverride(r);
     if (o) {
       out.push(o);
     }
@@ -491,16 +490,16 @@ export async function listShopHolidaysFromSheet(): Promise<ShopHoliday[]> {
     (a, b) =>
       a.date.localeCompare(b.date) || a.shop.localeCompare(b.shop),
   );
-  return dedupeShopHolidays(out);
+  return dedupeOverrides(out);
 }
 
 /**
- * 休業日1件を追記。同一 date+shop が既にあれば何も追加しない。
+ * 同一 date+shop が既にあれば何も追加しない。
  */
-export async function addShopHolidayToSheet(
-  h: ShopHoliday,
+export async function addShopDayOverrideToSheet(
+  h: ShopDayOverride,
 ): Promise<{ alreadyExists: boolean }> {
-  const sheet = await getOrCreateShopHolidaysWorksheet();
+  const sheet = await getOrCreateShopOperatingDaysWorksheet();
   const rows = await sheet.getRows();
   for (const r of rows) {
     if (cellString(r.get("date")) === h.date && cellString(r.get("shop")) === h.shop) {
@@ -511,10 +510,10 @@ export async function addShopHolidayToSheet(
   return { alreadyExists: false };
 }
 
-export async function deleteShopHolidayInSheet(
-  h: ShopHoliday,
+export async function deleteShopDayOverrideInSheet(
+  h: ShopDayOverride,
 ): Promise<{ deleted: boolean }> {
-  const sheet = await getOrCreateShopHolidaysWorksheet();
+  const sheet = await getOrCreateShopOperatingDaysWorksheet();
   const rows = await sheet.getRows();
   for (const r of rows) {
     const date = cellString(r.get("date"));

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
-import type { ShopHoliday, ShopName } from "@/lib/types";
+import { isDefaultOperatingDay } from "@/lib/shopOperatingDay";
+import type { ShopDayOverride, ShopName } from "@/lib/types";
 
 type Props = {
-  holidays: ShopHoliday[];
+  overrides: ShopDayOverride[];
   onAfterChange: () => void | Promise<void>;
 };
 
@@ -20,7 +21,14 @@ async function parseJson(
   }
 }
 
-export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
+function effectLabel(iso: string): { kind: "open" | "closed"; text: string } {
+  if (isDefaultOperatingDay(iso)) {
+    return { kind: "closed", text: "特別休業（通常は営業の日を休みに）" };
+  }
+  return { kind: "open", text: "特別営業（土日祝の休み日を営業に）" };
+}
+
+export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
   const idDate = useId();
   const idShop = useId();
   const [date, setDate] = useState("");
@@ -28,6 +36,8 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const nextEffect = useMemo(() => (date ? effectLabel(date) : null), [date]);
 
   const add = useCallback(async () => {
     setErr(null);
@@ -38,7 +48,7 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/shop-holidays", {
+      const res = await fetch("/api/shop-operating-days", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, shop }),
@@ -50,7 +60,7 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
         return;
       }
       if (data.alreadyExists) {
-        setMsg("すでに同じ日付・店舗が登録されています。");
+        setMsg("すでに同じ日付・店舗の例外が登録されています。");
       } else {
         setMsg("登録しました。");
         setDate("");
@@ -62,15 +72,15 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
   }, [date, onAfterChange, shop]);
 
   const remove = useCallback(
-    async (h: ShopHoliday) => {
-      if (!window.confirm("この店舗休業日の登録を削除しますか？")) {
+    async (h: ShopDayOverride) => {
+      if (!window.confirm("この例外行を削除しますか？")) {
         return;
       }
       setErr(null);
       setMsg(null);
       setBusy(true);
       try {
-        const u = new URL("/api/shop-holidays", window.location.origin);
+        const u = new URL("/api/shop-operating-days", window.location.origin);
         u.searchParams.set("date", h.date);
         u.searchParams.set("shop", h.shop);
         const res = await fetch(u.toString(), { method: "DELETE" });
@@ -89,23 +99,29 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
     [onAfterChange],
   );
 
-  const sorted = [...holidays].sort(
-    (a, b) => a.date.localeCompare(b.date) || a.shop.localeCompare(b.shop),
+  const sorted = useMemo(
+    () =>
+      [...overrides].sort(
+        (a, b) => a.date.localeCompare(b.date) || a.shop.localeCompare(b.shop),
+      ),
+    [overrides],
   );
 
   return (
     <div
       className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-sm"
       role="region"
-      aria-label="店舗休業日の管理"
+      aria-label="店舗営業・休業の設定"
     >
-      <h3 className="font-semibold text-slate-900">店舗休業日（shop_holidays シート）</h3>
+      <h3 className="font-semibold text-slate-900">店舗営業・休業設定</h3>
       <p className="mt-1 text-slate-600">
-        登録した日は、週次の該当店舗枠を「店舗休業日」表示にし、一括入力の行を省きます。スプレッドシートに
-        <code className="mx-0.5 rounded bg-slate-200/80 px-1">shop_holidays</code>
-        タブがなければ API が自動作成します。
+        デフォルト: <strong>土日祝は休み</strong>、<strong>平日（祝以外）は営業</strong>。
+        下記で「例外」を登録します（<strong>特別営業</strong>: 元が休みの日を開ける /
+        <strong>特別休業</strong>: 元が営業の日に閉める）。シート
+        <code className="mx-0.5 rounded bg-slate-200/80 px-1">shop_operating_days</code>
+        。
       </p>
-      <div className="mt-2 flex max-w-md flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
+      <div className="mt-2 flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
         <div className="min-w-0">
           <label className="text-xs font-medium text-slate-700" htmlFor={idDate}>
             日付
@@ -143,8 +159,22 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
           }}
           className="min-h-[40px] rounded-lg bg-slate-800 px-3 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? "処理中…" : "休業日を登録"}
+          {busy ? "処理中…" : "例外を登録"}
         </button>
+        {date ? (
+          <p
+            className="w-full text-xs text-slate-700 sm:min-w-0"
+            role="status"
+            aria-live="polite"
+          >
+            この日付の効果:{" "}
+            <span
+              className={nextEffect?.kind === "open" ? "font-semibold text-emerald-800" : "font-semibold text-amber-900"}
+            >
+              {nextEffect?.text}
+            </span>
+          </p>
+        ) : null}
       </div>
       {err ? (
         <p className="mt-2 text-sm text-red-700" role="alert">
@@ -157,14 +187,25 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
         </p>
       ) : null}
       {sorted.length > 0 ? (
-        <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 text-xs">
-          {sorted.map((h) => (
+        <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 text-xs">
+          {sorted.map((h) => {
+            const eff = effectLabel(h.date);
+            return (
             <li
               key={`${h.date}-${h.shop}`}
               className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1 last:border-0"
             >
               <span>
-                {h.date.replaceAll("-", "/")} ・ {SHOP_TAB_LABEL[h.shop] ?? h.shop}
+                {h.date.replaceAll("-", "/")} ・ {SHOP_TAB_LABEL[h.shop] ?? h.shop}{" "}
+                <span
+                  className={
+                    eff.kind === "open"
+                      ? "rounded bg-emerald-100 px-1 text-emerald-900"
+                      : "rounded bg-amber-100 px-1 text-amber-900"
+                  }
+                >
+                  {eff.kind === "open" ? "特別営業" : "特別休業"}
+                </span>
               </span>
               <button
                 type="button"
@@ -177,10 +218,11 @@ export function ShopHolidayAdminPanel({ holidays, onAfterChange }: Props) {
                 削除
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : (
-        <p className="mt-2 text-xs text-slate-500">登録中の店舗休業日はありません。</p>
+        <p className="mt-2 text-xs text-slate-500">登録中の例外はありません（デフォルトの土日休・平日営業のまま）。</p>
       )}
     </div>
   );

@@ -4,8 +4,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { SHOP_TAB_LABEL } from "@/lib/master";
 import { isHqStaff } from "@/lib/master";
-import { isShopClosedOn } from "@/lib/shopHolidays";
-import type { ShopHoliday, ShopName, ShiftRow } from "@/lib/types";
+import {
+  isSpecialClosedDay,
+  isSpecialOperatingDay,
+  isStoreClosed,
+} from "@/lib/shopOperatingDay";
+import type { ShopDayOverride, ShopName, ShiftRow } from "@/lib/types";
 import {
   addMonths,
   formatYearMonth,
@@ -31,7 +35,7 @@ type Props = {
   confirmingId?: string | null;
   onAddForDay?: (iso: string) => void;
   onEditRow?: (row: ShiftRow) => void;
-  shopHolidays: ShopHoliday[];
+  shopDayOverrides: ShopDayOverride[];
 };
 
 function typeShort(t: string) {
@@ -52,7 +56,7 @@ export function MonthlyShopCalendar({
   confirmingId,
   onAddForDay,
   onEditRow,
-  shopHolidays,
+  shopDayOverrides,
 }: Props) {
   const y = month.getFullYear();
   const m1 = month.getMonth() + 1;
@@ -128,23 +132,25 @@ export function MonthlyShopCalendar({
           }
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
-          const dayClosed = isShopClosedOn(shop, key, shopHolidays);
+          const dayClosed = isStoreClosed(shop, key, shopDayOverrides);
           if (dayClosed) {
+            const specClose = isSpecialClosedDay(shop, key, shopDayOverrides);
             return (
               <div
                 key={key}
                 className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 border border-slate-300 bg-slate-200/90 p-1 text-left"
-                aria-label="店舗休業日"
+                aria-label={specClose ? "特別休業" : "店舗休業日"}
               >
                 <div className="w-full text-[11px] font-semibold text-slate-500">{d.getDate()}</div>
                 <p className="w-full text-center text-[10px] font-bold leading-tight text-slate-800">
-                  店休
+                  {specClose ? "特休" : "店休"}
                 </p>
               </div>
             );
           }
           const tone = getCalDayTone(d);
           const wkHoli = isHolidayForCalendarLabel(d);
+          const specOpen = isSpecialOperatingDay(shop, key, shopDayOverrides);
           return (
             <div
               key={key}
@@ -159,6 +165,9 @@ export function MonthlyShopCalendar({
               <div className="flex items-center justify-between gap-0.5">
                 <div className="flex flex-col">
                   <div className={dayNumberPillClass(tone)}>{d.getDate()}</div>
+                  {specOpen ? (
+                    <span className="text-[8px] font-semibold text-emerald-800">特営</span>
+                  ) : null}
                   {wkHoli ? (
                     <span className="text-[8px] font-medium text-red-800">祝</span>
                   ) : null}
