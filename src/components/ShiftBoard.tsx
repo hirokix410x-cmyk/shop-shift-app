@@ -4,7 +4,7 @@ import { Calendar, ChevronLeft, ChevronRight, MapPin, User } from "lucide-react"
 import { useMemo, useState } from "react";
 import { SHOPS } from "@/lib/master";
 import { rowCardClassName } from "@/lib/shiftStyle";
-import type { ShiftRow } from "@/lib/types";
+import type { ShiftRow, ShopName } from "@/lib/types";
 import { isHqStaff } from "@/lib/master";
 import { addDays, startOfWindow, toISODateString } from "@/lib/dateUtils";
 
@@ -15,6 +15,8 @@ type Props = {
   adminMode?: boolean;
   onConfirmRow?: (id: string) => void | Promise<void>;
   confirmingId?: string | null;
+  onAddForDay?: (date: string, shop: ShopName) => void;
+  onEditRow?: (row: ShiftRow) => void;
 };
 
 function formatWeekday(d: Date) {
@@ -28,6 +30,8 @@ export function ShiftBoard({
   adminMode = false,
   onConfirmRow,
   confirmingId,
+  onAddForDay,
+  onEditRow,
 }: Props) {
   const windowStart = startOfWindow(anchor);
   const days = useMemo(() => {
@@ -112,7 +116,18 @@ export function ShiftBoard({
                         {shop}
                       </h3>
                       {shopRows.length === 0 ? (
-                        <p className="text-sm text-stone-400">この日の登録はありません</p>
+                        <div className="space-y-2">
+                          <p className="text-sm text-stone-400">この日の登録はありません</p>
+                          {onAddForDay ? (
+                            <button
+                              type="button"
+                              onClick={() => onAddForDay(key, shop)}
+                              className="w-full min-h-[40px] rounded-lg border border-dashed border-amber-400 bg-amber-50/50 text-sm font-medium text-amber-900"
+                            >
+                              ＋ この日・この店舗に枠を追加
+                            </button>
+                          ) : null}
+                        </div>
                       ) : (
                         <ul className="space-y-2">
                           {shopRows.map((row) => {
@@ -158,25 +173,45 @@ export function ShiftBoard({
                                 {row.note ? (
                                   <p className="text-xs text-stone-500">備考: {row.note}</p>
                                 ) : null}
-                                {adminMode &&
-                                row.status === "希望" &&
-                                onConfirmRow ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => onConfirmRow(row.id)}
-                                    disabled={confirmingId === row.id}
-                                    className="mt-1 min-h-[36px] w-full rounded-lg bg-amber-600 text-xs font-semibold text-white disabled:opacity-50"
-                                  >
-                                    {confirmingId === row.id
-                                      ? "確定処理中…"
-                                      : "この希望を確定"}
-                                  </button>
-                                ) : null}
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  {onEditRow ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onEditRow(row)}
+                                      className="min-h-[36px] flex-1 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-800"
+                                    >
+                                      修正
+                                    </button>
+                                  ) : null}
+                                  {adminMode &&
+                                  row.status === "希望" &&
+                                  onConfirmRow ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onConfirmRow(row.id)}
+                                      disabled={confirmingId === row.id}
+                                      className="min-h-[36px] flex-1 rounded-lg bg-amber-600 text-xs font-semibold text-white disabled:opacity-50"
+                                    >
+                                      {confirmingId === row.id
+                                        ? "確定処理中…"
+                                        : "この希望を確定"}
+                                    </button>
+                                  ) : null}
+                                </div>
                               </li>
                             );
                           })}
                         </ul>
                       )}
+                      {shopRows.length > 0 && onAddForDay ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddForDay(key, shop)}
+                          className="mt-2 w-full min-h-[36px] rounded-lg border border-dashed border-stone-300 text-xs font-medium text-stone-700"
+                        >
+                          ＋ 同じ日・店舗にもう1枠
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}

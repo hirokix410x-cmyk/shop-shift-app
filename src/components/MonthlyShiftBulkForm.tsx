@@ -41,7 +41,9 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
   const [staffName, setStaffName] = useState("");
   const [noteAll, setNoteAll] = useState("");
+  const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   const nextMonth = useMemo(() => getNextMonthFirst(), []);
   const year = nextMonth.getFullYear();
@@ -65,6 +67,13 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
       const next: DayTypeMap = {};
       for (const iso of isoDates) {
         next[iso] = (prev[iso] as ShiftType | "") ?? "";
+      }
+      return next;
+    });
+    setDayNotes((prev) => {
+      const next: Record<string, string> = {};
+      for (const iso of isoDates) {
+        next[iso] = prev[iso] ?? "";
       }
       return next;
     });
@@ -161,7 +170,7 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
         </div>
         <div className="sm:col-span-2">
           <label className="text-sm font-medium text-stone-700" htmlFor="bulk-note">
-            共通・備考（全行に同じ内容を付与）
+            共通・備考（日別を空欄のとき、各行に同じ文を付与。日別欄を優先）
           </label>
           <textarea
             id="bulk-note"
@@ -169,7 +178,7 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
             className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-base"
             value={noteAll}
             onChange={(e) => setNoteAll(e.target.value)}
-            placeholder="空欄可"
+            placeholder="空欄可。イレギュラー枠のための一文もここに入れられます（日別があれば日別を優先）"
           />
         </div>
       </div>
@@ -202,38 +211,65 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
               <div className="w-32 shrink-0 text-sm font-medium text-stone-800">
                 {formatLabel(iso)}
               </div>
-              <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-5">
-                <button
-                  type="button"
-                  onClick={() => setDay(iso, "")}
-                  className={
-                    cur === ""
-                      ? "min-h-[44px] rounded-lg border-2 border-stone-400 bg-stone-100 text-sm"
-                      : "min-h-[44px] rounded-lg border border-stone-200 text-sm text-stone-500"
-                  }
-                >
-                  登録しない
-                </button>
-                {TYPES.map((t) => (
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start">
+                <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-5">
                   <button
-                    key={t}
                     type="button"
-                    onClick={() => setDay(iso, t)}
+                    onClick={() => setDay(iso, "")}
                     className={
-                      cur === t
-                        ? "min-h-[44px] rounded-lg border-2 border-amber-500 bg-amber-50 text-sm font-medium text-amber-950"
-                        : "min-h-[44px] rounded-lg border border-stone-200 bg-stone-50 text-sm"
+                      cur === ""
+                        ? "min-h-[44px] rounded-lg border-2 border-stone-400 bg-stone-100 text-sm"
+                        : "min-h-[44px] rounded-lg border border-stone-200 text-sm text-stone-500"
                     }
                   >
-                    {t}
+                    登録しない
                   </button>
-                ))}
+                  {TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setDay(iso, t)}
+                      className={
+                        cur === t
+                          ? "min-h-[44px] rounded-lg border-2 border-amber-500 bg-amber-50 text-sm font-medium text-amber-950"
+                          : "min-h-[44px] rounded-lg border border-stone-200 bg-stone-50 text-sm"
+                      }
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                {cur ? (
+                  <div className="w-full min-w-0 sm:max-w-[12rem]">
+                    <label className="sr-only" htmlFor={`dn-${iso}`}>
+                      この日の備考
+                    </label>
+                    <textarea
+                      id={`dn-${iso}`}
+                      rows={2}
+                      className="w-full rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs"
+                      placeholder="日別の備考（空なら共通へ）"
+                      value={dayNotes[iso] ?? ""}
+                      onChange={(e) =>
+                        setDayNotes((m) => ({ ...m, [iso]: e.target.value }))
+                      }
+                    />
+                    {cur === "イレギュラー" ? (
+                      <p className="mt-0.5 text-[11px] text-amber-800">※イレは日別か共通のどちらかに内容を入れてください</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           );
         })}
       </div>
 
+      {submitErr ? (
+        <p className="mb-2 text-sm text-red-700" role="alert">
+          {submitErr}
+        </p>
+      ) : null}
       <p className="mt-2 text-sm text-stone-500">
         送信対象: {selectedCount} 日分（ステータスは「希望」で登録）
       </p>
@@ -242,13 +278,22 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
         type="button"
         disabled={saving || submitDisabled || selectedCount === 0}
         onClick={async () => {
+          setSubmitErr(null);
           const staff = staffName.trim() === "" ? null : staffName.trim();
-          const note = noteAll.trim();
+          const globalN = noteAll.trim();
           const rows: ShiftRow[] = [];
           for (const iso of isoDates) {
             const t = (dayMap[iso] as ShiftType | "") ?? "";
             if (t === "") {
               continue;
+            }
+            const perDay = (dayNotes[iso] ?? "").trim();
+            const combined = perDay || globalN;
+            if (t === "イレギュラー" && !combined) {
+              setSubmitErr(
+                `「イレギュラー」: ${formatLabel(iso)} の枠に、日別か共通の備考（時間帯等）を入力してください。`,
+              );
+              return;
             }
             rows.push({
               id: newIds(),
@@ -256,7 +301,7 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
               shop,
               staff_name: staff,
               type: t,
-              note,
+              note: combined,
               status: "希望",
             });
           }

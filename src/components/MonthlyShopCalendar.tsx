@@ -23,6 +23,8 @@ type Props = {
   adminMode: boolean;
   onConfirmRow?: (id: string) => void | Promise<void>;
   confirmingId?: string | null;
+  onAddForDay?: (iso: string) => void;
+  onEditRow?: (row: ShiftRow) => void;
 };
 
 function typeShort(t: string) {
@@ -41,6 +43,8 @@ export function MonthlyShopCalendar({
   adminMode,
   onConfirmRow,
   confirmingId,
+  onAddForDay,
+  onEditRow,
 }: Props) {
   const y = month.getFullYear();
   const m1 = month.getMonth() + 1;
@@ -110,12 +114,24 @@ export function MonthlyShopCalendar({
           return (
             <div
               key={key}
-              className="min-h-[5.5rem] space-y-0.5 bg-white p-1 text-left"
+              className="flex min-h-[5.5rem] flex-col space-y-0.5 bg-white p-1 text-left"
             >
-              <div className="text-[11px] font-semibold text-stone-500">
-                {d.getDate()}
+              <div className="flex items-center justify-between gap-0.5">
+                <div className="text-[11px] font-semibold text-stone-500">
+                  {d.getDate()}
+                </div>
+                {onAddForDay ? (
+                  <button
+                    type="button"
+                    onClick={() => onAddForDay(key)}
+                    className="shrink-0 rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-950"
+                    title="この日の枠を追加"
+                  >
+                    ＋
+                  </button>
+                ) : null}
               </div>
-              <ul className="space-y-0.5">
+              <ul className="min-h-0 flex-1 space-y-0.5">
                 {list.map((r) => {
                   const isOpen = r.staff_name == null;
                   const hq = isHqStaff(r.staff_name);
@@ -125,25 +141,35 @@ export function MonthlyShopCalendar({
                       key={r.id}
                       className={
                         isOpen
-                          ? "rounded border border-red-300 bg-red-50 px-0.5 py-0.5 text-[10px] leading-tight text-red-900"
+                          ? "cursor-pointer rounded border border-red-300 bg-red-50 px-0.5 py-0.5 text-[10px] leading-tight text-red-900"
                           : hq
-                            ? "rounded border border-blue-300 bg-blue-50 px-0.5 py-0.5 text-[10px] leading-tight text-blue-950"
-                            : "rounded border border-stone-200 bg-stone-50 px-0.5 py-0.5 text-[10px] leading-tight text-stone-800"
+                            ? "cursor-pointer rounded border border-blue-300 bg-blue-50 px-0.5 py-0.5 text-[10px] leading-tight text-blue-950"
+                            : "cursor-pointer rounded border border-stone-200 bg-stone-50 px-0.5 py-0.5 text-[10px] leading-tight text-stone-800"
                       }
                     >
-                      <span
-                        className={
-                          r.status === "確定" ? "text-emerald-700" : "text-amber-700"
-                        }
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => onEditRow?.(r)}
+                        disabled={!onEditRow}
                       >
-                        {typeShort(r.type)}
-                        {r.status === "希望" ? "希" : "確"}
-                      </span>{" "}
-                      {r.staff_name ?? "募"}
+                        <span
+                          className={
+                            r.status === "確定" ? "text-emerald-700" : "text-amber-700"
+                          }
+                        >
+                          {typeShort(r.type)}
+                          {r.status === "希望" ? "希" : "確"}
+                        </span>{" "}
+                        {r.staff_name ?? "募"}
+                      </button>
                       {adminMode && unconfirmed && onConfirmRow ? (
                         <button
                           type="button"
-                          onClick={() => onConfirmRow(r.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConfirmRow(r.id);
+                          }}
                           disabled={confirmingId === r.id}
                           className="mt-0.5 block w-full rounded bg-amber-600 py-0.5 text-[9px] font-medium text-white disabled:opacity-50"
                         >

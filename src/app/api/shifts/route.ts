@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   appendShiftToSheet,
   appendShiftsToSheet,
+  clearAllDataRowsInSheet,
+  deleteShiftByIdInSheet,
   listShiftsFromSheet,
   shiftFromRequestBody,
   shiftPatchFromRequestBody,
@@ -55,6 +57,31 @@ export async function POST(request: Request) {
     if (
       body != null &&
       typeof body === "object" &&
+      (body as { action?: string }).action === "clearAllDataRows"
+    ) {
+      const token = request.headers.get("x-admin-token");
+      const expected = process.env.SHIFT_ADMIN_CLEAR_TOKEN?.trim();
+      if (!expected) {
+        return jsonError(403, {
+          error:
+            "全データ削除は無効です（サーバーに SHIFT_ADMIN_CLEAR_TOKEN が未設定）",
+          errorCode: "CLEAR_DISABLED",
+          hint: "Vercel の Environment Variables に SHIFT_ADMIN_CLEAR_TOKEN を設定してください。",
+        });
+      }
+      if (token !== expected) {
+        return jsonError(403, {
+          error: "管理者トークンが一致しません",
+          errorCode: "FORBIDDEN",
+        });
+      }
+      const { deleted } = await clearAllDataRowsInSheet();
+      return NextResponse.json({ ok: true, deleted, action: "clearAllDataRows" });
+    }
+
+    if (
+      body != null &&
+      typeof body === "object" &&
       "shifts" in body &&
       Array.isArray((body as { shifts: unknown }).shifts)
     ) {
@@ -105,6 +132,8 @@ export async function PATCH(request: Request) {
       type: p.type,
       note: p.note,
       staff_name: p.staff_name,
+      date: p.date,
+      shop: p.shop,
     });
     return NextResponse.json({ ok: true, id: p.id, patch: p });
   } catch (e) {
@@ -119,6 +148,28 @@ export async function PATCH(request: Request) {
     const { status, payload } = toClientSheetErrorPayload(
       e,
       "スプレッドシートの更新に失敗しました",
+    );
+    return jsonError(status, payload);
+  }
+}
+
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id")?.trim();
+  if (!id) {
+    return jsonError(400, {
+      error: "クエリ ?id= が必要です",
+      errorCode: "MISSING_ID",
+    });
+  }
+  try {
+    await deleteShiftByIdInSheet(id);
+    return NextResponse.json({ ok: true, id });
+  } catch (e) {
+    logShiftsConnectionFailure("DELETE", "save", e);
+    const { status, payload } = toClientSheetErrorPayload(
+      e,
+      "行の削除に失敗しました",
     );
     return jsonError(status, payload);
   }

@@ -207,13 +207,17 @@ export async function updateShiftByIdInSheet(
     type?: ShiftType;
     note?: string;
     staff_name?: string | null;
+    date?: string;
+    shop?: ShopName;
   },
 ): Promise<void> {
   if (
     patch.status == null &&
     patch.type == null &&
     patch.note === undefined &&
-    patch.staff_name === undefined
+    patch.staff_name === undefined &&
+    patch.date === undefined &&
+    patch.shop === undefined
   ) {
     throw new Error("更新内容がありません");
   }
@@ -235,11 +239,51 @@ export async function updateShiftByIdInSheet(
     if (patch.staff_name !== undefined) {
       r.set("staff_name", patch.staff_name ?? "");
     }
+    if (patch.date != null) {
+      r.set("date", patch.date);
+    }
+    if (patch.shop != null) {
+      r.set("shop", patch.shop);
+    }
     await r.save();
     invalidateShiftsListCache();
     return;
   }
   throw new Error(`該当する行が見つかりません (id: ${id})`);
+}
+
+export async function deleteShiftByIdInSheet(id: string): Promise<void> {
+  const sheet = await getShiftsWorksheet();
+  const rows = await sheet.getRows();
+  for (const r of rows) {
+    if (cellString(r.get("id")) !== id) {
+      continue;
+    }
+    await r.delete();
+    invalidateShiftsListCache();
+    return;
+  }
+  throw new Error(`該当する行が見つかりません (id: ${id})`);
+}
+
+/**
+ * ヘッダー行（1行目）以外のデータ行をすべて削除（開発・テスト用）
+ */
+export async function clearAllDataRowsInSheet(): Promise<{ deleted: number }> {
+  const sheet = await getShiftsWorksheet();
+  let total = 0;
+  let round = await sheet.getRows();
+  let guard = 0;
+  while (round.length > 0 && guard < 200) {
+    for (const r of round) {
+      await r.delete();
+      total++;
+    }
+    round = await sheet.getRows();
+    guard++;
+  }
+  invalidateShiftsListCache();
+  return { deleted: total };
 }
 
 export function shiftsArrayFromRequestBody(data: unknown): ShiftRow[] {
@@ -312,6 +356,8 @@ export function shiftPatchFromRequestBody(data: unknown): {
   type?: ShiftType;
   note?: string;
   staff_name?: string | null;
+  date?: string;
+  shop?: ShopName;
 } {
   if (data == null || typeof data !== "object") {
     throw new TypeError("JSON オブジェクトが必要です");
@@ -327,6 +373,8 @@ export function shiftPatchFromRequestBody(data: unknown): {
     type?: ShiftType;
     note?: string;
     staff_name?: string | null;
+    date?: string;
+    shop?: ShopName;
   } = { id };
 
   if ("status" in o && o.status != null && String(o.status).trim() !== "") {
@@ -351,15 +399,31 @@ export function shiftPatchFromRequestBody(data: unknown): {
     patch.staff_name =
       sn == null || String(sn).trim() === "" ? null : String(sn).trim();
   }
+  if ("date" in o && o.date != null && String(o.date).trim() !== "") {
+    const d = String(o.date).trim();
+    if (!DATE_RE.test(d)) {
+      throw new TypeError("date は YYYY-MM-DD 形式で指定してください");
+    }
+    patch.date = d;
+  }
+  if ("shop" in o && o.shop != null && String(o.shop).trim() !== "") {
+    const sh = String(o.shop).trim();
+    if (!SHOP_SET.has(sh)) {
+      throw new TypeError("shop が正しくありません");
+    }
+    patch.shop = sh as ShopName;
+  }
 
   if (
     patch.status == null &&
     patch.type == null &&
     patch.note === undefined &&
-    patch.staff_name === undefined
+    patch.staff_name === undefined &&
+    patch.date === undefined &&
+    patch.shop === undefined
   ) {
     throw new TypeError(
-      "status / type / note / staff_name のいずれかを指定してください",
+      "status / type / note / staff_name / date / shop のいずれかを指定してください",
     );
   }
   return patch;

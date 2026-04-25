@@ -138,7 +138,7 @@ export type ClientSheetErrorPayload = {
  * サーバー専用: 接続失敗の詳細を console.error へ
  */
 export function logShiftsConnectionFailure(
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   operation: "load" | "save" | "parse_body" | "validate",
   err: unknown,
 ): void {

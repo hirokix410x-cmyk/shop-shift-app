@@ -7,6 +7,7 @@ import { addDays, startOfMonth, startOfWindow, toISODateString } from "@/lib/dat
 import { ShiftBoard } from "./ShiftBoard";
 import { MonthlyShopCalendar } from "./MonthlyShopCalendar";
 import { MonthlyShiftBulkForm } from "./MonthlyShiftBulkForm";
+import { ShiftFormModal, type FormContext } from "./ShiftFormModal";
 import type { ShopName } from "@/lib/types";
 
 function today(): Date {
@@ -105,6 +106,10 @@ export function ShiftApp() {
   const [monthTabShop, setMonthTabShop] = useState<ShopName>(SHOPS[0]);
   const [adminMode, setAdminMode] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [formCtx, setFormCtx] = useState<FormContext | null>(null);
+  const [formBusy, setFormBusy] = useState(false);
+  const [adminClearToken, setAdminClearToken] = useState("");
+  const [clearing, setClearing] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
@@ -184,6 +189,130 @@ export function ShiftApp() {
     [applyErrorFromResponse, refetch],
   );
 
+  const openNew = useCallback((date: string, shop: ShopName) => {
+    setFormCtx({ kind: "new", date, shop });
+  }, []);
+
+  const openEdit = useCallback((row: ShiftRow) => {
+    setFormCtx({ kind: "edit", row });
+  }, []);
+
+  const handleCreate = useCallback(
+    async (row: ShiftRow) => {
+      setFormBusy(true);
+      setSaveError(null);
+      try {
+        const res = await fetch("/api/shifts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(row),
+        });
+        const text = await res.text();
+        const data = await parseJsonResponse(res, text);
+        if (!res.ok) {
+          applyErrorFromResponse("登録に失敗しました", res, data);
+          throw new Error("create failed");
+        }
+        await refetch();
+      } finally {
+        setFormBusy(false);
+      }
+    },
+    [applyErrorFromResponse, refetch],
+  );
+
+  const handleUpdate = useCallback(
+    async (row: ShiftRow) => {
+      setFormBusy(true);
+      setSaveError(null);
+      try {
+        const res = await fetch("/api/shifts", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: row.id,
+            type: row.type,
+            staff_name: row.staff_name,
+            note: row.note,
+            status: row.status,
+            date: row.date,
+            shop: row.shop,
+          }),
+        });
+        const text = await res.text();
+        const data = await parseJsonResponse(res, text);
+        if (!res.ok) {
+          applyErrorFromResponse("更新に失敗しました", res, data);
+          throw new Error("update failed");
+        }
+        await refetch();
+      } finally {
+        setFormBusy(false);
+      }
+    },
+    [applyErrorFromResponse, refetch],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setFormBusy(true);
+      setSaveError(null);
+      try {
+        const res = await fetch(
+          `/api/shifts?id=${encodeURIComponent(id)}`,
+          { method: "DELETE" },
+        );
+        const text = await res.text();
+        const data = await parseJsonResponse(res, text);
+        if (!res.ok) {
+          applyErrorFromResponse("削除に失敗しました", res, data);
+          throw new Error("delete failed");
+        }
+        await refetch();
+      } finally {
+        setFormBusy(false);
+      }
+    },
+    [applyErrorFromResponse, refetch],
+  );
+
+  const handleClearAllData = useCallback(async () => {
+    const tok = adminClearToken.trim();
+    if (!tok) {
+      setSaveError({
+        title: "全データ削除",
+        message: "Vercel 等に設定した SHIFT_ADMIN_CLEAR_TOKEN と同じ文字列を入力してください。",
+        httpStatus: 0,
+      });
+      return;
+    }
+    if (!window.confirm("スプレッドシートのデータ行をすべて削除します（1行目のヘッダーは残ります）。よろしいですか？")) {
+      return;
+    }
+    setClearing(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/shifts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": tok,
+        },
+        body: JSON.stringify({ action: "clearAllDataRows" }),
+      });
+      const text = await res.text();
+      const data = await parseJsonResponse(res, text);
+      if (!res.ok) {
+        applyErrorFromResponse("全データ削除に失敗しました", res, data);
+        return;
+      }
+      setAdminClearToken("");
+      await refetch();
+    } finally {
+      setClearing(false);
+    }
+  }, [adminClearToken, applyErrorFromResponse, refetch]);
+
   const onConfirmRow = useCallback(
     async (id: string) => {
       setSaveError(null);
@@ -216,8 +345,8 @@ export function ShiftApp() {
           シフト管理
         </h1>
         <p className="text-sm text-stone-600">
-          募集中=赤、本部社員=青。翌月分は一括希望を1回のAPIで送信。管理者は「確定モード」で希望を承認し、行の
-          status を「確定」に更新します。
+          募集中=赤、本部社員=青。翌月分は一括希望を1回のAPIで送信。週次・月間から個別登録・修正も可能です。確定済み行を修正すると
+          status は「希望」に戻り、承認のやり直しが必要です（管理者向け再確認用）。
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-stone-800">
@@ -227,9 +356,48 @@ export function ShiftApp() {
               checked={adminMode}
               onChange={(e) => setAdminMode(e.target.checked)}
             />
-            管理者：確定モード（希望に「確定」ボタンを表示）
+            管理者：確定モード（希望に「確定」ボタンを表示）・テスト用全削除
           </label>
         </div>
+        {adminMode ? (
+          <div
+            className="rounded-xl border border-red-200/80 bg-red-50/40 px-3 py-3 text-sm"
+            role="region"
+            aria-label="テスト用データ全削除"
+          >
+            <p className="font-medium text-red-950">開発・テスト用：全データ削除</p>
+            <p className="mt-1 text-red-900/90">
+              サーバーに設定した <code className="rounded bg-red-100/80 px-1">SHIFT_ADMIN_CLEAR_TOKEN</code>{" "}
+              を入力のうえ実行してください（ヘッダー行以外の行を削除します）。
+            </p>
+            <div className="mt-2 flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1">
+                <label className="sr-only" htmlFor="admin-clear-token">
+                  管理者トークン
+                </label>
+                <input
+                  id="admin-clear-token"
+                  type="password"
+                  autoComplete="off"
+                  className="min-h-[40px] w-full rounded-lg border border-red-200 bg-white px-2 font-mono text-sm"
+                  value={adminClearToken}
+                  onChange={(e) => setAdminClearToken(e.target.value)}
+                  placeholder="トークン"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={clearing}
+                onClick={() => {
+                  void handleClearAllData();
+                }}
+                className="min-h-[40px] shrink-0 rounded-lg border border-red-400 bg-red-100 px-3 text-sm font-semibold text-red-950 disabled:opacity-50"
+              >
+                {clearing ? "削除中…" : "全データ行をクリア"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       {loadError ? <ErrorCallout detail={loadError} /> : null}
@@ -284,6 +452,8 @@ export function ShiftApp() {
           adminMode={adminMode}
           onConfirmRow={adminMode ? onConfirmRow : undefined}
           confirmingId={confirmingId}
+          onAddForDay={openNew}
+          onEditRow={openEdit}
         />
       ) : (
         <div className="space-y-4">
@@ -313,9 +483,21 @@ export function ShiftApp() {
             adminMode={adminMode}
             onConfirmRow={adminMode ? onConfirmRow : undefined}
             confirmingId={confirmingId}
+            onAddForDay={(iso) => openNew(iso, monthTabShop)}
+            onEditRow={openEdit}
           />
         </div>
       )}
+
+      <ShiftFormModal
+        open={formCtx != null}
+        context={formCtx}
+        onClose={() => setFormCtx(null)}
+        onCreate={handleCreate}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        busy={formBusy}
+      />
     </div>
   );
 }
