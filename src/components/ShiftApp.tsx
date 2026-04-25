@@ -36,6 +36,10 @@ type ApiErrorDisplay = {
 const SHIFT_LOAD_REASSURANCE =
   "シフトは読み込めませんでしたが、店舗の営業状況（店休等）は最新です。";
 
+/** プログラムスクロールで上端に空ける分（`scroll-mt-20` ≒ 5rem の考え方に合わせる） */
+const SCROLL_ANCHOR_TOP_OFFSET_PX = 80;
+const SCROLL_AFTER_VIEW_CHANGE_MS = 120;
+
 function formatSuccessTimestamp(): string {
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -376,21 +380,32 @@ export function ShiftApp() {
   );
 
   const scrollToId = useCallback((id: string) => {
+    const run = () => {
+      const el = document.getElementById(id);
+      if (!el) {
+        return;
+      }
+      const y =
+        el.getBoundingClientRect().top + window.scrollY - SCROLL_ANCHOR_TOP_OFFSET_PX;
+      const maxTop = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo({
+        top: Math.max(0, Math.min(y, maxTop)),
+        behavior: "smooth",
+      });
+    };
     window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
+      window.setTimeout(run, SCROLL_AFTER_VIEW_CHANGE_MS);
     });
   }, []);
 
   const goToWeekView = useCallback(() => {
     setBoardView("week");
-    scrollToId("panel-week");
+    scrollToId("section-views");
   }, [scrollToId]);
 
   const goToMonthView = useCallback(() => {
     setBoardView("month");
-    scrollToId("panel-month");
+    scrollToId("section-views");
   }, [scrollToId]);
 
   const navBtnClass =
@@ -475,7 +490,7 @@ export function ShiftApp() {
         </p>
       ) : null}
 
-      <section id="section-bulk" className="scroll-mt-4">
+      <section id="section-bulk" className="scroll-mt-20">
         <MonthlyShiftBulkForm
           onSubmitBulk={handleBulkSubmit}
           submitDisabled={loading}
@@ -486,7 +501,7 @@ export function ShiftApp() {
 
       <section
         id="section-admin"
-        className="scroll-mt-4 rounded-2xl border border-amber-200/70 bg-amber-50/30 p-3 sm:p-4"
+        className="scroll-mt-20 rounded-2xl border border-amber-200/70 bg-amber-50/30 p-3 sm:p-4"
         aria-label="管理者向け"
       >
         <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-stone-800">
@@ -542,7 +557,10 @@ export function ShiftApp() {
 
       <div className="border-t border-stone-200 pt-6" />
 
-      <section id="section-views" className="scroll-mt-4 space-y-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
+      <section
+        id="section-views"
+        className="scroll-mt-20 space-y-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-lg font-semibold text-stone-800">表示</h2>
           <div className="flex flex-wrap items-center gap-2">
@@ -575,7 +593,7 @@ export function ShiftApp() {
         </div>
 
         {boardView === "week" ? (
-          <div id="panel-week">
+          <div id="panel-week" className="scroll-mt-20">
             <ShiftBoard
               rows={inWindow}
               anchor={weekAnchor}
@@ -589,7 +607,7 @@ export function ShiftApp() {
             />
           </div>
         ) : (
-          <div id="panel-month" className="space-y-4">
+          <div id="panel-month" className="scroll-mt-20 space-y-4">
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="店舗">
               {SHOPS.map((s) => (
                 <button
