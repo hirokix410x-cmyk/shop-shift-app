@@ -14,8 +14,23 @@ export function startOfWeekMonday(d: Date): Date {
   return x;
 }
 
+/** ローカル日付の正午（週次アンカー等で時刻揺れを防ぐ） */
+export function toLocalNoon(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(12, 0, 0, 0);
+  return x;
+}
+
+/**
+ * 週次リストの区間先頭。アンカー日をそのまま1日目とし、以降6日分で計7日を表示する（月曜始まりではない）。
+ */
 export function startOfWindow(anchor: Date): Date {
-  return startOfWeekMonday(anchor);
+  return toLocalNoon(anchor);
+}
+
+/** 今日の日付（ローカル）を YYYY-MM-DD */
+export function todayISODateString(): string {
+  return toISODateString(toLocalNoon(new Date()));
 }
 
 export function toISODateString(d: Date): string {

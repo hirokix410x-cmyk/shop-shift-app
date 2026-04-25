@@ -6,7 +6,12 @@ import { SHOPS } from "@/lib/master";
 import { rowCardClassName } from "@/lib/shiftStyle";
 import type { ShiftRow, ShopName } from "@/lib/types";
 import { isHqStaff } from "@/lib/master";
-import { addDays, startOfWindow, toISODateString } from "@/lib/dateUtils";
+import {
+  addDays,
+  startOfWindow,
+  toISODateString,
+  todayISODateString,
+} from "@/lib/dateUtils";
 import { dayHeaderClass, dayHeaderTextClass, daySubTextClass, getCalDayTone } from "@/lib/jpCalendarStyle";
 
 type Props = {
@@ -35,6 +40,7 @@ export function ShiftBoard({
   onEditRow,
 }: Props) {
   const windowStart = startOfWindow(anchor);
+  const windowEnd = useMemo(() => addDays(windowStart, 6), [windowStart]);
   const days = useMemo(() => {
     const list: Date[] = [];
     for (let i = 0; i < 7; i++) {
@@ -72,24 +78,27 @@ export function ShiftBoard({
             日付帯: <span className="text-blue-800">土</span>＝青、
             <span className="text-red-700">日祝</span>＝薄赤
           </p>
+          <p className="text-xs text-stone-500">先頭の日＝起算日（初回は今日から7日）。前後ボタンで7日ずつ移動。</p>
         </div>
         <div className="flex items-center justify-center gap-2">
           <button
             type="button"
             onClick={() => onAnchorChange(addDays(anchor, -7))}
             className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-stone-200 bg-white p-2 text-stone-700 shadow-sm active:scale-95"
-            aria-label="前の週"
+            aria-label="表示を7日分さかのぼる"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <span className="min-w-[10.5rem] text-center text-sm text-stone-600">
-            {toISODateString(windowStart).replaceAll("-", "/")} 〜
+          <span className="min-w-[12rem] text-center text-sm text-stone-600 sm:min-w-[16rem]">
+            {toISODateString(windowStart).replaceAll("-", "/")} 〜{" "}
+            {toISODateString(windowEnd).replaceAll("-", "/")}
+            <span className="ml-1 text-xs text-stone-400">（7日）</span>
           </span>
           <button
             type="button"
             onClick={() => onAnchorChange(addDays(anchor, 7))}
             className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-stone-200 bg-white p-2 text-stone-700 shadow-sm active:scale-95"
-            aria-label="次の週"
+            aria-label="表示を7日分進める"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -101,17 +110,47 @@ export function ShiftBoard({
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
           const tone = getCalDayTone(d);
+          const isToday = key === todayISODateString();
           return (
-            <li key={key} className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/80 shadow-sm">
-              <div className={`px-4 py-3 ${dayHeaderClass(tone)}`}>
-                <p
-                  className={`text-base font-medium ${dayHeaderTextClass(
-                    tone,
-                  )}`}
-                >
-                  {key.replaceAll("-", "/")}{" "}
-                  <span className={daySubTextClass(tone)}>({formatWeekday(d)})</span>
-                </p>
+            <li
+              key={key}
+              aria-current={isToday ? "date" : undefined}
+              className={
+                isToday
+                  ? "overflow-hidden rounded-2xl border-2 border-amber-400 bg-amber-50/80 shadow-md ring-2 ring-amber-200 ring-offset-2"
+                  : "overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/80 shadow-sm"
+              }
+            >
+              <div
+                className={
+                  isToday
+                    ? "border-b border-amber-200 bg-amber-100/95"
+                    : `px-4 py-3 ${dayHeaderClass(tone)}`
+                }
+              >
+                {isToday ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                    <p className="text-base font-medium text-amber-950">
+                      {key.replaceAll("-", "/")}{" "}
+                      <span className="text-amber-800/90">({formatWeekday(d)})</span>
+                    </p>
+                    <span
+                      className="shrink-0 rounded-md bg-amber-500 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
+                      lang="en"
+                    >
+                      Today
+                    </span>
+                  </div>
+                ) : (
+                  <p
+                    className={`text-base font-medium ${dayHeaderTextClass(
+                      tone,
+                    )}`}
+                  >
+                    {key.replaceAll("-", "/")}{" "}
+                    <span className={daySubTextClass(tone)}>({formatWeekday(d)})</span>
+                  </p>
+                )}
               </div>
               <div className="grid gap-4 p-4 sm:grid-cols-2">
                 {SHOPS.map((shop) => {
