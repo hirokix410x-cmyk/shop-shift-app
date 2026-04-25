@@ -12,6 +12,11 @@ import {
   startOfMonth,
   toISODateString,
 } from "@/lib/dateUtils";
+import {
+  dayNumberPillClass,
+  getCalDayTone,
+  isHolidayForCalendarLabel,
+} from "@/lib/jpCalendarStyle";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -100,8 +105,17 @@ export function MonthlyShopCalendar({
       </div>
 
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 text-center text-xs">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="bg-stone-100 py-1.5 font-medium text-stone-600">
+        {WEEKDAYS.map((w, wi) => (
+          <div
+            key={w}
+            className={
+              wi === 0
+                ? "bg-red-100/90 py-1.5 font-medium text-red-900"
+                : wi === 6
+                  ? "bg-blue-100/90 py-1.5 font-medium text-blue-900"
+                  : "bg-stone-100 py-1.5 font-medium text-stone-600"
+            }
+          >
             {w}
           </div>
         ))}
@@ -111,14 +125,25 @@ export function MonthlyShopCalendar({
           }
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
+          const tone = getCalDayTone(d);
+          const wkHoli = isHolidayForCalendarLabel(d);
           return (
             <div
               key={key}
-              className="flex min-h-[5.5rem] flex-col space-y-0.5 bg-white p-1 text-left"
+              className={
+                tone === "saturday"
+                  ? "flex min-h-[5.5rem] flex-col space-y-0.5 border border-blue-200/50 bg-blue-50/40 p-1 text-left"
+                  : tone === "sundayOrHoliday"
+                    ? "flex min-h-[5.5rem] flex-col space-y-0.5 border border-red-200/50 bg-red-50/40 p-1 text-left"
+                    : "flex min-h-[5.5rem] flex-col space-y-0.5 bg-white p-1 text-left"
+              }
             >
               <div className="flex items-center justify-between gap-0.5">
-                <div className="text-[11px] font-semibold text-stone-500">
-                  {d.getDate()}
+                <div className="flex flex-col">
+                  <div className={dayNumberPillClass(tone)}>{d.getDate()}</div>
+                  {wkHoli ? (
+                    <span className="text-[8px] font-medium text-red-800">祝</span>
+                  ) : null}
                 </div>
                 {onAddForDay ? (
                   <button

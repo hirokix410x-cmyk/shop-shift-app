@@ -1,12 +1,13 @@
 "use client";
 
 import { Calendar, ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { SHOPS } from "@/lib/master";
 import { rowCardClassName } from "@/lib/shiftStyle";
 import type { ShiftRow, ShopName } from "@/lib/types";
 import { isHqStaff } from "@/lib/master";
 import { addDays, startOfWindow, toISODateString } from "@/lib/dateUtils";
+import { dayHeaderClass, dayHeaderTextClass, daySubTextClass, getCalDayTone } from "@/lib/jpCalendarStyle";
 
 type Props = {
   rows: ShiftRow[];
@@ -67,6 +68,10 @@ export function ShiftBoard({
             <span className="text-red-700">赤</span>＝募集中 / 未充足、
             <span className="text-blue-800">青</span>＝本部社員の枠
           </p>
+          <p className="text-xs text-stone-500">
+            日付帯: <span className="text-blue-800">土</span>＝青、
+            <span className="text-red-700">日祝</span>＝薄赤
+          </p>
         </div>
         <div className="flex items-center justify-center gap-2">
           <button
@@ -95,12 +100,17 @@ export function ShiftBoard({
         {days.map((d) => {
           const key = toISODateString(d);
           const list = byDate.get(key) ?? [];
+          const tone = getCalDayTone(d);
           return (
             <li key={key} className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/80 shadow-sm">
-              <div className="border-b border-stone-200 bg-white px-4 py-3">
-                <p className="text-base font-medium text-stone-900">
+              <div className={`px-4 py-3 ${dayHeaderClass(tone)}`}>
+                <p
+                  className={`text-base font-medium ${dayHeaderTextClass(
+                    tone,
+                  )}`}
+                >
                   {key.replaceAll("-", "/")}{" "}
-                  <span className="text-stone-500">({formatWeekday(d)})</span>
+                  <span className={daySubTextClass(tone)}>({formatWeekday(d)})</span>
                 </p>
               </div>
               <div className="grid gap-4 p-4 sm:grid-cols-2">

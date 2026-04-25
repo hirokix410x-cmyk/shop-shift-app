@@ -331,7 +331,11 @@ export function ShiftApp() {
         </p>
       ) : null}
 
-      <MonthlyShiftBulkForm onSubmitBulk={handleBulkSubmit} submitDisabled={loading} />
+      <MonthlyShiftBulkForm
+        onSubmitBulk={handleBulkSubmit}
+        submitDisabled={loading}
+        allRows={rows}
+      />
 
       <div className="border-t border-stone-200 pt-6" />
 

@@ -4,11 +4,12 @@ import { CalendarRange } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
 import type { ShopName, ShiftRow, ShiftType } from "@/lib/types";
+import { addMonths, getDaysInMonth, startOfMonth, toISODateString } from "@/lib/dateUtils";
 import {
-  getDaysInMonth,
-  getNextMonthFirst,
-  toISODateString,
-} from "@/lib/dateUtils";
+  dayRowSurfaceClass,
+  getCalDayToneFromIso,
+  weekdayPublicHolidayLabel,
+} from "@/lib/jpCalendarStyle";
 
 const TYPES: ShiftType[] = ["全日", "午前", "午後", "イレギュラー"];
 
@@ -24,7 +25,15 @@ function newIds(): string {
 type Props = {
   onSubmitBulk: (shifts: ShiftRow[]) => void | Promise<void>;
   submitDisabled?: boolean;
+  /** 重複案内・取り込み用の既存シフト行 */
+  allRows: ShiftRow[];
 };
+
+function todayNoon(): Date {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
 
 function formatLabel(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -36,18 +45,26 @@ function formatLabel(iso: string) {
   }).format(dt);
 }
 
-export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
+export function MonthlyShiftBulkForm({
+  onSubmitBulk,
+  submitDisabled,
+  allRows,
+}: Props) {
   const listId = useId();
   const [shop, setShop] = useState<ShopName>(SHOPS[0]);
+  const [monthOffset, setMonthOffset] = useState<0 | 1 | 2>(1);
   const [staffName, setStaffName] = useState("");
   const [noteAll, setNoteAll] = useState("");
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
-  const nextMonth = useMemo(() => getNextMonthFirst(), []);
-  const year = nextMonth.getFullYear();
-  const month1 = nextMonth.getMonth() + 1;
+  const targetMonth = useMemo(
+    () => addMonths(startOfMonth(todayNoon()), monthOffset),
+    [monthOffset],
+  );
+  const year = targetMonth.getFullYear();
+  const month1 = targetMonth.getMonth() + 1;
   const daysInMonth = getDaysInMonth(year, month1);
 
   const [dayMap, setDayMap] = useState<DayTypeMap>({});
@@ -114,19 +131,113 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
     }).length;
   }, [isoDates, dayMap]);
 
+  const isoSet = useMemo(() => new Set(isoDates), [isoDates]);
+
+  const { existingDateCount, hasExisting } = useMemo(() => {
+    const dates = new Set<string>();
+    for (const r of allRows) {
+      if (r.shop !== shop) {
+        continue;
+      }
+      if (isoSet.has(r.date)) {
+        dates.add(r.date);
+      }
+    }
+    return { existingDateCount: dates.size, hasExisting: dates.size > 0 };
+  }, [allRows, shop, isoSet]);
+
+  const importExisting = useCallback(() => {
+    setSubmitErr(null);
+    setDayMap((prev) => {
+      const next: DayTypeMap = { ...prev };
+      for (const iso of isoDates) {
+        const forDay = allRows.filter((r) => r.shop === shop && r.date === iso);
+        if (forDay.length === 0) {
+          continue;
+        }
+        const r0 = forDay[0];
+        next[iso] = r0.type;
+      }
+      return next;
+    });
+    setDayNotes((prev) => {
+      const next: Record<string, string> = { ...prev };
+      for (const iso of isoDates) {
+        const forDay = allRows.filter((r) => r.shop === shop && r.date === iso);
+        if (forDay.length === 0) {
+          continue;
+        }
+        next[iso] = forDay[0].note ?? "";
+      }
+      return next;
+    });
+  }, [allRows, shop, isoDates]);
+
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
       <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-stone-800">
         <CalendarRange className="h-5 w-5 text-stone-500" />
-        翌月分をまとめて登録
+        月を選んで一括登録
       </h2>
-      <p className="mb-4 text-sm text-stone-600">
-        対象:{" "}
-        <span className="font-medium text-stone-800">
-          {year}年{month1}月（全{daysInMonth}日）
-        </span>
-        。区分を付けた日だけが1回のAPIで一括送信されます。
+      <p className="mb-3 text-sm text-stone-600">
+        対象月の全日（1日〜{daysInMonth}日）を列挙します。区分を付けた日だけが1回のAPIで一括送信されます。
+        <span className="ml-1 text-xs text-stone-500">（行の色: 土=青、日/祝=薄赤）</span>
       </p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <label className="text-sm font-medium text-stone-700" htmlFor="bulk-month">
+          対象月
+        </label>
+        <select
+          id="bulk-month"
+          className="min-h-[44px] rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm font-medium text-stone-900"
+          value={monthOffset}
+          onChange={(e) => {
+            setMonthOffset(Number(e.target.value) as 0 | 1 | 2);
+            setSubmitErr(null);
+          }}
+        >
+          {([0, 1, 2] as const).map((off) => {
+            const m = addMonths(startOfMonth(todayNoon()), off);
+            const y = m.getFullYear();
+            const mo = m.getMonth() + 1;
+            const label =
+              off === 0 ? "当月" : off === 1 ? "翌月" : "翌々月";
+            return (
+              <option key={off} value={off}>
+                {label}（{y}年{mo}月）
+              </option>
+            );
+          })}
+        </select>
+        <span className="text-sm text-stone-600">
+          ={" "}
+          <span className="font-medium text-stone-800">
+            {year}年{month1}月
+          </span>
+        </span>
+      </div>
+
+      {hasExisting ? (
+        <div
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950"
+          role="status"
+        >
+          <p>
+            この店舗×{year}年{month1}月には、すでに登録のある日が{" "}
+            <strong>{existingDateCount}日分</strong> あります。一括送信すると
+            <strong>同じ日に行が追記</strong>され、スプレッドシート上で重複する可能性があります。整理が必要なら、先に
+            スプレッドシートで削除するか、週次・月間の「修正」で個別に直してください。
+          </p>
+          <button
+            type="button"
+            onClick={importExisting}
+            className="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-950"
+          >
+            既存の1件目（同じ日）を日別の区分・備考に取り込む
+          </button>
+        </div>
+      ) : null}
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -203,13 +314,26 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
       <div className="max-h-[min(24rem,50vh)] space-y-2 overflow-y-auto rounded-xl border border-stone-100 bg-stone-50/60 p-2 sm:max-h-[32rem]">
         {isoDates.map((iso) => {
           const cur = (dayMap[iso] as ShiftType | "") ?? "";
+          const tone = getCalDayToneFromIso(iso);
+          const wkHoli = weekdayPublicHolidayLabel(iso);
           return (
             <div
               key={iso}
-              className="flex flex-col gap-2 rounded-lg border border-stone-100 bg-white p-2 sm:flex-row sm:items-center"
+              className={`flex flex-col gap-2 rounded-lg border p-2 sm:flex-row sm:items-center ${dayRowSurfaceClass(tone)}`}
             >
-              <div className="w-32 shrink-0 text-sm font-medium text-stone-800">
+              <div
+                className={`w-32 shrink-0 text-sm font-medium ${
+                  tone === "saturday"
+                    ? "text-blue-900"
+                    : tone === "sundayOrHoliday"
+                      ? "text-red-900"
+                      : "text-stone-800"
+                }`}
+              >
                 {formatLabel(iso)}
+                {wkHoli ? (
+                  <span className="ml-1 text-[10px] font-medium text-red-800">（{wkHoli}）</span>
+                ) : null}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start">
                 <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-5">
@@ -316,7 +440,7 @@ export function MonthlyShiftBulkForm({ onSubmitBulk, submitDisabled }: Props) {
       >
         {saving
           ? "一括送信中…"
-          : `翌月分を一括でスプレッドシートに保存（${selectedCount}件）`}
+          : `${year}年${month1}月分を一括でスプレッドシートに保存（${selectedCount}件）`}
       </button>
     </section>
   );
