@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   appendShiftToSheet,
   appendShiftsToSheet,
-  clearAllDataRowsInSheet,
   deleteShiftByIdInSheet,
   listShiftsFromSheet,
   shiftFromRequestBody,
@@ -59,24 +58,10 @@ export async function POST(request: Request) {
       typeof body === "object" &&
       (body as { action?: string }).action === "clearAllDataRows"
     ) {
-      const token = request.headers.get("x-admin-token");
-      const expected = process.env.SHIFT_ADMIN_CLEAR_TOKEN?.trim();
-      if (!expected) {
-        return jsonError(403, {
-          error:
-            "全データ削除は無効です（サーバーに SHIFT_ADMIN_CLEAR_TOKEN が未設定）",
-          errorCode: "CLEAR_DISABLED",
-          hint: "Vercel の Environment Variables に SHIFT_ADMIN_CLEAR_TOKEN を設定してください。",
-        });
-      }
-      if (token !== expected) {
-        return jsonError(403, {
-          error: "管理者トークンが一致しません",
-          errorCode: "FORBIDDEN",
-        });
-      }
-      const { deleted } = await clearAllDataRowsInSheet();
-      return NextResponse.json({ ok: true, deleted, action: "clearAllDataRows" });
+      return jsonError(410, {
+        error: "全データ一括削除の機能は廃止されました。不要な行は行ごとに削除してください。",
+        errorCode: "CLEAR_REMOVED",
+      });
     }
 
     if (

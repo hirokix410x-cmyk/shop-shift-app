@@ -108,8 +108,6 @@ export function ShiftApp() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [formCtx, setFormCtx] = useState<FormContext | null>(null);
   const [formBusy, setFormBusy] = useState(false);
-  const [adminClearToken, setAdminClearToken] = useState("");
-  const [clearing, setClearing] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
@@ -276,43 +274,6 @@ export function ShiftApp() {
     [applyErrorFromResponse, refetch],
   );
 
-  const handleClearAllData = useCallback(async () => {
-    const tok = adminClearToken.trim();
-    if (!tok) {
-      setSaveError({
-        title: "全データ削除",
-        message: "Vercel 等に設定した SHIFT_ADMIN_CLEAR_TOKEN と同じ文字列を入力してください。",
-        httpStatus: 0,
-      });
-      return;
-    }
-    if (!window.confirm("スプレッドシートのデータ行をすべて削除します（1行目のヘッダーは残ります）。よろしいですか？")) {
-      return;
-    }
-    setClearing(true);
-    setSaveError(null);
-    try {
-      const res = await fetch("/api/shifts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Admin-Token": tok,
-        },
-        body: JSON.stringify({ action: "clearAllDataRows" }),
-      });
-      const text = await res.text();
-      const data = await parseJsonResponse(res, text);
-      if (!res.ok) {
-        applyErrorFromResponse("全データ削除に失敗しました", res, data);
-        return;
-      }
-      setAdminClearToken("");
-      await refetch();
-    } finally {
-      setClearing(false);
-    }
-  }, [adminClearToken, applyErrorFromResponse, refetch]);
-
   const onConfirmRow = useCallback(
     async (id: string) => {
       setSaveError(null);
@@ -356,48 +317,9 @@ export function ShiftApp() {
               checked={adminMode}
               onChange={(e) => setAdminMode(e.target.checked)}
             />
-            管理者：確定モード（希望に「確定」ボタンを表示）・テスト用全削除
+            管理者：確定モード（希望行に「確定」ボタンを表示）
           </label>
         </div>
-        {adminMode ? (
-          <div
-            className="rounded-xl border border-red-200/80 bg-red-50/40 px-3 py-3 text-sm"
-            role="region"
-            aria-label="テスト用データ全削除"
-          >
-            <p className="font-medium text-red-950">開発・テスト用：全データ削除</p>
-            <p className="mt-1 text-red-900/90">
-              サーバーに設定した <code className="rounded bg-red-100/80 px-1">SHIFT_ADMIN_CLEAR_TOKEN</code>{" "}
-              を入力のうえ実行してください（ヘッダー行以外の行を削除します）。
-            </p>
-            <div className="mt-2 flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="min-w-0 flex-1">
-                <label className="sr-only" htmlFor="admin-clear-token">
-                  管理者トークン
-                </label>
-                <input
-                  id="admin-clear-token"
-                  type="password"
-                  autoComplete="off"
-                  className="min-h-[40px] w-full rounded-lg border border-red-200 bg-white px-2 font-mono text-sm"
-                  value={adminClearToken}
-                  onChange={(e) => setAdminClearToken(e.target.value)}
-                  placeholder="トークン"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={clearing}
-                onClick={() => {
-                  void handleClearAllData();
-                }}
-                className="min-h-[40px] shrink-0 rounded-lg border border-red-400 bg-red-100 px-3 text-sm font-semibold text-red-950 disabled:opacity-50"
-              >
-                {clearing ? "削除中…" : "全データ行をクリア"}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </header>
 
       {loadError ? <ErrorCallout detail={loadError} /> : null}

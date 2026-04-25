@@ -266,26 +266,6 @@ export async function deleteShiftByIdInSheet(id: string): Promise<void> {
   throw new Error(`該当する行が見つかりません (id: ${id})`);
 }
 
-/**
- * ヘッダー行（1行目）以外のデータ行をすべて削除（開発・テスト用）
- */
-export async function clearAllDataRowsInSheet(): Promise<{ deleted: number }> {
-  const sheet = await getShiftsWorksheet();
-  let total = 0;
-  let round = await sheet.getRows();
-  let guard = 0;
-  while (round.length > 0 && guard < 200) {
-    for (const r of round) {
-      await r.delete();
-      total++;
-    }
-    round = await sheet.getRows();
-    guard++;
-  }
-  invalidateShiftsListCache();
-  return { deleted: total };
-}
-
 export function shiftsArrayFromRequestBody(data: unknown): ShiftRow[] {
   if (data == null || typeof data !== "object") {
     throw new TypeError("JSON オブジェクトが必要です");
