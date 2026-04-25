@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Pita Work | シフト管理システム",
   description:
-    "ぴたカフェ各店舗向け。シフト希望の一括登録・週次・月間表示、枠の編集、管理者向けの確定操作および店舗営業・休業の例外登録に対応したPita Workの管理画面です。",
+    "ぴたカフェ各店舗向け。シフト希望の一括登録・週次・店舗別・個人別の月間表示（2店舗まとめ表示含む）・枠の編集、同日重複（店舗を跨いだダブルブッキング）の防止、管理者向けの確定操作および店舗営業・休業の例外登録。",
 };
 
 export default function RootLayout({

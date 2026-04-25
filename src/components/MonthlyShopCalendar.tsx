@@ -2,7 +2,12 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
-import { SHOP_TAB_LABEL, SHOPS, isHqStaff } from "@/lib/master";
+import {
+  SHOP_TAB_LABEL,
+  SHOPS,
+  shopLabelTextClass,
+  shiftCalendarRowClassByShop,
+} from "@/lib/master";
 import type { PersonViewShopFilter } from "./PersonalShiftCalendar";
 import {
   isSpecialClosedDay,
@@ -206,7 +211,6 @@ export function MonthlyShopCalendar({
               <ul className="min-h-0 flex-1 space-y-0.5">
                 {list.map((r) => {
                   const isOpen = r.staff_name == null;
-                  const hq = isHqStaff(r.staff_name);
                   const unconfirmed = r.status === "希望";
                   const showShop = shop === "all";
                   return (
@@ -215,9 +219,7 @@ export function MonthlyShopCalendar({
                       className={
                         isOpen
                           ? "cursor-pointer rounded border border-red-300 bg-red-50 px-0.5 py-0.5 text-[10px] leading-tight text-red-900"
-                          : hq
-                            ? "cursor-pointer rounded border border-blue-300 bg-blue-50 px-0.5 py-0.5 text-[10px] leading-tight text-blue-950"
-                            : "cursor-pointer rounded border border-stone-200 bg-stone-50 px-0.5 py-0.5 text-[10px] leading-tight text-stone-800"
+                          : shiftCalendarRowClassByShop(r.shop)
                       }
                     >
                       <button
@@ -228,7 +230,7 @@ export function MonthlyShopCalendar({
                       >
                         {showShop ? (
                           <>
-                            <span className="font-medium text-amber-900/90">
+                            <span className={shopLabelTextClass(r.shop)}>
                               {SHOP_TAB_LABEL[r.shop] ?? r.shop}
                             </span>{" "}
                           </>

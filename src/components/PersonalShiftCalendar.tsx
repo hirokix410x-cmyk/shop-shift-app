@@ -2,7 +2,11 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
-import { SHOP_TAB_LABEL, isHqStaff } from "@/lib/master";
+import {
+  SHOP_TAB_LABEL,
+  shopLabelTextClass,
+  shiftCalendarRowClassByShop,
+} from "@/lib/master";
 import type { ShopName, ShiftRow } from "@/lib/types";
 import {
   addMonths,
@@ -193,16 +197,11 @@ export function PersonalShiftCalendar({
               </div>
               <ul className="min-h-0 flex-1 space-y-0.5">
                 {list.map((r) => {
-                  const hq = isHqStaff(r.staff_name);
                   const unconfirmed = r.status === "希望";
                   return (
                     <li
                       key={r.id}
-                      className={
-                        hq
-                          ? "cursor-pointer rounded border border-blue-300 bg-blue-50 px-0.5 py-0.5 text-[10px] leading-tight text-blue-950"
-                          : "cursor-pointer rounded border border-stone-200 bg-stone-50 px-0.5 py-0.5 text-[10px] leading-tight text-stone-800"
-                      }
+                      className={shiftCalendarRowClassByShop(r.shop)}
                     >
                       <button
                         type="button"
@@ -212,7 +211,7 @@ export function PersonalShiftCalendar({
                       >
                         {showShopInCell ? (
                           <>
-                            <span className="font-medium text-amber-900/90">
+                            <span className={shopLabelTextClass(r.shop)}>
                               {SHOP_TAB_LABEL[r.shop] ?? r.shop}
                             </span>{" "}
                           </>

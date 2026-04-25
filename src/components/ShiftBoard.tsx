@@ -83,9 +83,13 @@ export function ShiftBoard({
               <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden />
               募集中
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/90 px-2.5 py-0.5 font-medium text-blue-950">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600" aria-hidden />
-              本部社員
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50/90 px-2.5 py-0.5 font-medium text-amber-950">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+              中村店
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-50/90 px-2.5 py-0.5 font-medium text-sky-950">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-hidden />
+              九産大店
             </span>
           </div>
           <p className="mt-1 text-xs text-stone-500">
