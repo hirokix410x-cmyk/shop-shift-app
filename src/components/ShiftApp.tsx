@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOP_TAB_LABEL, SHOPS } from "@/lib/master";
 import type { ShiftRow, ShopDayOverride } from "@/lib/types";
 import { addDays, startOfMonth, startOfWindow, toISODateString } from "@/lib/dateUtils";
@@ -35,6 +35,15 @@ type ApiErrorDisplay = {
 
 const SHIFT_LOAD_REASSURANCE =
   "シフトは読み込めませんでしたが、店舗の営業状況（店休等）は最新です。";
+
+function formatSuccessTimestamp(): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
 
 function ErrorCallout({ detail }: { detail: ApiErrorDisplay }) {
   return (
@@ -141,6 +150,27 @@ export function ShiftApp() {
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
   const [saveError, setSaveError] = useState<ApiErrorDisplay | null>(null);
   const [shopDayOverrides, setShopDayOverrides] = useState<ShopDayOverride[]>([]);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const successToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSuccessToast = useCallback((message: string) => {
+    if (successToastTimeoutRef.current) {
+      clearTimeout(successToastTimeoutRef.current);
+    }
+    setSuccessToast(`${message}（${formatSuccessTimestamp()}）`);
+    successToastTimeoutRef.current = setTimeout(() => {
+      setSuccessToast(null);
+      successToastTimeoutRef.current = null;
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (successToastTimeoutRef.current) {
+        clearTimeout(successToastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const refetchShopDayOverrides = useCallback(async () => {
     setShopDayOverrides(await loadShopDayOverridesFromApi());
@@ -225,8 +255,9 @@ export function ShiftApp() {
         throw new Error(data.error ?? "bulk failed");
       }
       await refetch();
+      showSuccessToast("一括で保存しました");
     },
-    [applyErrorFromResponse, refetch],
+    [applyErrorFromResponse, refetch, showSuccessToast],
   );
 
   const openNew = useCallback((date: string, shop: ShopName) => {
@@ -254,11 +285,12 @@ export function ShiftApp() {
           throw new Error("create failed");
         }
         await refetch();
+        showSuccessToast("登録しました");
       } finally {
         setFormBusy(false);
       }
     },
-    [applyErrorFromResponse, refetch],
+    [applyErrorFromResponse, refetch, showSuccessToast],
   );
 
   const handleUpdate = useCallback(
@@ -286,11 +318,12 @@ export function ShiftApp() {
           throw new Error("update failed");
         }
         await refetch();
+        showSuccessToast("保存しました");
       } finally {
         setFormBusy(false);
       }
     },
-    [applyErrorFromResponse, refetch],
+    [applyErrorFromResponse, refetch, showSuccessToast],
   );
 
   const handleDelete = useCallback(
@@ -309,11 +342,12 @@ export function ShiftApp() {
           throw new Error("delete failed");
         }
         await refetch();
+        showSuccessToast("削除しました");
       } finally {
         setFormBusy(false);
       }
     },
-    [applyErrorFromResponse, refetch],
+    [applyErrorFromResponse, refetch, showSuccessToast],
   );
 
   const onConfirmRow = useCallback(
@@ -333,11 +367,12 @@ export function ShiftApp() {
           return;
         }
         await refetch();
+        showSuccessToast("確定しました");
       } finally {
         setConfirmingId(null);
       }
     },
-    [applyErrorFromResponse, refetch],
+    [applyErrorFromResponse, refetch, showSuccessToast],
   );
 
   const scrollToId = useCallback((id: string) => {
@@ -362,7 +397,22 @@ export function ShiftApp() {
     "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-amber-200 bg-white px-3 text-center text-sm font-medium text-amber-950 shadow-sm ring-1 ring-amber-100/80 transition active:scale-[0.99] sm:flex-initial sm:min-w-0 sm:px-4";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
+    <div
+      className="relative mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 sm:py-8"
+      aria-busy={loading}
+    >
+      {successToast ? (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex justify-center px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="pointer-events-auto max-w-md rounded-b-xl border border-emerald-200/90 bg-emerald-50 px-4 py-2.5 text-center text-sm font-medium text-emerald-950 shadow-md ring-1 ring-emerald-100">
+            {successToast}
+          </p>
+        </div>
+      ) : null}
       <header className="space-y-3">
         <p className="text-sm font-medium text-amber-800">ぴたカフェ 店舗シフト</p>
         <h1 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
@@ -416,44 +466,12 @@ export function ShiftApp() {
         </div>
       </details>
 
-      <div className="space-y-3">
-        <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-stone-800">
-          <input
-            type="checkbox"
-            className="h-4 w-4 shrink-0 rounded border-stone-300"
-            checked={adminMode}
-            onChange={(e) => setAdminMode(e.target.checked)}
-          />
-          管理者向け機能を有効にする
-        </label>
-        {adminMode ? (
-          <div className="space-y-4 rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 sm:p-4">
-            <div>
-              <h3 className="text-base font-semibold text-stone-900">確定操作モード</h3>
-              <p className="mt-1 text-sm text-stone-600">
-                週次・月間の希望行に「この希望を確定」が表示され、承認作業を行えます。
-              </p>
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-stone-900">店舗営業・休業の登録</h3>
-              <div className="mt-2">
-                <ShopOperatingDayPanel
-                  hideTitle
-                  overrides={shopDayOverrides}
-                  onAfterChange={refetchShopDayOverrides}
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       {loadError ? <ErrorCallout detail={loadError} /> : null}
       {saveError ? <ErrorCallout detail={saveError} /> : null}
 
       {loading ? (
         <p className="text-sm text-stone-500" aria-live="polite">
-          スプレッドシートから読み込み中…
+          データを読み込んでいます…
         </p>
       ) : null}
 
@@ -464,6 +482,62 @@ export function ShiftApp() {
           allRows={rows}
           shopDayOverrides={shopDayOverrides}
         />
+      </section>
+
+      <section
+        id="section-admin"
+        className="scroll-mt-4 rounded-2xl border border-amber-200/70 bg-amber-50/30 p-3 sm:p-4"
+        aria-label="管理者向け"
+      >
+        <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-stone-800">
+          <input
+            type="checkbox"
+            className="h-4 w-4 shrink-0 rounded border-stone-300"
+            checked={adminMode}
+            onChange={(e) => setAdminMode(e.target.checked)}
+          />
+          管理者向け機能を有効にする
+        </label>
+        {adminMode ? (
+          <div className="mt-3 space-y-2">
+            <details className="group rounded-xl border border-amber-200/90 bg-amber-50/80 open:bg-amber-50/95">
+              <summary className="cursor-pointer list-none rounded-xl px-3 py-3 text-sm font-semibold text-amber-950 marker:content-none [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex min-h-[40px] w-full items-center justify-between gap-2">
+                  確定操作モード
+                  <span
+                    className="text-amber-600/80 transition group-open:rotate-180"
+                    aria-hidden
+                  >
+                    ▼
+                  </span>
+                </span>
+              </summary>
+              <div className="border-t border-amber-200/70 px-3 pb-3 pt-0 text-sm text-stone-600">
+                週次・月間の希望行に「この希望を確定」が表示され、承認作業を行えます。
+              </div>
+            </details>
+            <details className="group rounded-xl border border-amber-200/90 bg-amber-50/80 open:bg-amber-50/95">
+              <summary className="cursor-pointer list-none rounded-xl px-3 py-3 text-sm font-semibold text-amber-950 marker:content-none [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex min-h-[40px] w-full items-center justify-between gap-2">
+                  店舗営業・休業の登録
+                  <span
+                    className="text-amber-600/80 transition group-open:rotate-180"
+                    aria-hidden
+                  >
+                    ▼
+                  </span>
+                </span>
+              </summary>
+              <div className="border-t border-amber-200/70 p-2 pt-0 sm:p-3 sm:pt-0">
+                <ShopOperatingDayPanel
+                  hideTitle
+                  overrides={shopDayOverrides}
+                  onAfterChange={refetchShopDayOverrides}
+                />
+              </div>
+            </details>
+          </div>
+        ) : null}
       </section>
 
       <div className="border-t border-stone-200 pt-6" />

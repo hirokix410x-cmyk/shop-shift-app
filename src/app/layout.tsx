@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "店舗シフト | ぴたカフェ",
-  description: "中村学園大学前店・九産大店のシフト希望と枠管理（モック）",
+  title: "Pita Work | シフト管理システム",
+  description:
+    "ぴたカフェ各店舗向け。シフト希望の一括登録・週次・月間表示、枠の編集、管理者向けの確定操作および店舗営業・休業の例外登録に対応したPita Workの管理画面です。",
 };
 
 export default function RootLayout({
