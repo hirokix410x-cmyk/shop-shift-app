@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { X } from "lucide-react";
 import { staffOptionsForShop } from "@/lib/master";
 import { SHOPS } from "@/lib/master";
+import { assertProposedShiftsNoTimeDoubleBook } from "@/lib/staffShiftConflict";
 import type { ShopName, ShiftRow, ShiftType } from "@/lib/types";
 
 const TYPES: ShiftType[] = ["全日", "午前", "午後", "イレギュラー"];
@@ -19,6 +20,8 @@ type Props = {
   onCreate: (row: ShiftRow) => Promise<void>;
   onUpdate: (row: ShiftRow) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  /** 重複（ダブルブッキング）判定用の全行 */
+  allRows: ShiftRow[];
   busy?: boolean;
 };
 
@@ -36,6 +39,7 @@ export function ShiftFormModal({
   onCreate,
   onUpdate,
   onDelete,
+  allRows,
   busy = false,
 }: Props) {
   const listId = useId();
@@ -120,37 +124,51 @@ export function ShiftFormModal({
               return;
             }
             const n = note.trim();
-            if (isNew) {
-              await onCreate({
-                id: newId(),
-                date: dateStr,
-                shop,
-                staff_name: staff,
-                type,
-                note: n,
-                status: "希望",
-              });
-            } else {
-              const r = context.row;
-              let nextNote = n;
-              let nextStatus: "希望" | "確定" = r.status;
-              if (isConfirmedEdit) {
-                nextStatus = "希望";
-                if (!n.startsWith("【要再承認】")) {
-                  nextNote = n ? `【要再承認】${n}` : "【要再承認】";
+            try {
+              if (isNew) {
+                const row: ShiftRow = {
+                  id: newId(),
+                  date: dateStr,
+                  shop,
+                  staff_name: staff,
+                  type,
+                  note: n,
+                  status: "希望",
+                };
+                assertProposedShiftsNoTimeDoubleBook([row], allRows, {});
+                await onCreate(row);
+              } else {
+                const r = context.row;
+                let nextNote = n;
+                let nextStatus: "希望" | "確定" = r.status;
+                if (isConfirmedEdit) {
+                  nextStatus = "希望";
+                  if (!n.startsWith("【要再承認】")) {
+                    nextNote = n ? `【要再承認】${n}` : "【要再承認】";
+                  }
                 }
+                const nextRow: ShiftRow = {
+                  ...r,
+                  date: dateStr,
+                  shop,
+                  staff_name: staff,
+                  type,
+                  note: nextNote,
+                  status: nextStatus,
+                };
+                assertProposedShiftsNoTimeDoubleBook([nextRow], allRows, {
+                  excludeIds: new Set([r.id]),
+                });
+                await onUpdate(nextRow);
               }
-              await onUpdate({
-                ...r,
-                date: dateStr,
-                shop,
-                staff_name: staff,
-                type,
-                note: nextNote,
-                status: nextStatus,
-              });
+              onClose();
+            } catch (err) {
+              if (err instanceof TypeError) {
+                setErr(err.message);
+                return;
+              }
+              throw err;
             }
-            onClose();
           }}
         >
           {isConfirmedEdit ? (

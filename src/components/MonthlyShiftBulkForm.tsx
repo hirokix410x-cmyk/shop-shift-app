@@ -4,6 +4,7 @@ import { CalendarRange } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
 import { isStoreClosed } from "@/lib/shopOperatingDay";
+import { assertProposedShiftsNoTimeDoubleBook } from "@/lib/staffShiftConflict";
 import type { ShopDayOverride, ShopName, ShiftRow, ShiftType } from "@/lib/types";
 import { addMonths, getDaysInMonth, startOfMonth, toISODateString } from "@/lib/dateUtils";
 import {
@@ -463,6 +464,15 @@ export function MonthlyShiftBulkForm({
               note: combined,
               status: "希望",
             });
+          }
+          try {
+            assertProposedShiftsNoTimeDoubleBook(rows, allRows, {});
+          } catch (e) {
+            if (e instanceof TypeError) {
+              setSubmitErr(e.message);
+              return;
+            }
+            throw e;
           }
           setSaving(true);
           try {

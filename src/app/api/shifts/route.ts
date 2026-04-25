@@ -10,6 +10,11 @@ import {
   updateShiftByIdInSheet,
 } from "@/lib/googleSheets";
 import {
+  assertProposedShiftsNoTimeDoubleBook,
+  mergeShiftWithPatch,
+  patchAffectsTimeOrPlace,
+} from "@/lib/staffShiftConflict";
+import {
   logShiftsConnectionFailure,
   toClientSheetErrorPayload,
 } from "@/lib/sheetConnectionLog";
@@ -71,10 +76,14 @@ export async function POST(request: Request) {
       Array.isArray((body as { shifts: unknown }).shifts)
     ) {
       const shifts = shiftsArrayFromRequestBody(body);
+      const existing = await listShiftsFromSheet();
+      assertProposedShiftsNoTimeDoubleBook(shifts, existing, {});
       await appendShiftsToSheet(shifts);
       return NextResponse.json({ ok: true, count: shifts.length, shifts });
     }
     const shift = shiftFromRequestBody(body);
+    const existingSingle = await listShiftsFromSheet();
+    assertProposedShiftsNoTimeDoubleBook([shift], existingSingle, {});
     await appendShiftToSheet(shift);
     return NextResponse.json({ ok: true, shift });
   } catch (e) {
@@ -112,6 +121,20 @@ export async function PATCH(request: Request) {
   }
   try {
     const p = shiftPatchFromRequestBody(body);
+    const all = await listShiftsFromSheet();
+    const current = all.find((r) => r.id === p.id);
+    if (!current) {
+      return jsonError(404, {
+        error: `該当する行が見つかりません (id: ${p.id})`,
+        errorCode: "NOT_FOUND",
+      });
+    }
+    const merged = mergeShiftWithPatch(current, p);
+    if (patchAffectsTimeOrPlace(p)) {
+      assertProposedShiftsNoTimeDoubleBook([merged], all, {
+        excludeIds: new Set([p.id]),
+      });
+    }
     await updateShiftByIdInSheet(p.id, {
       status: p.status,
       type: p.type,
