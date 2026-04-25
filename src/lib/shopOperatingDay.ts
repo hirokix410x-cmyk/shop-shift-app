@@ -48,15 +48,11 @@ export function isStoreClosed(
   const has = hasDayOverride(shop, date, overrides);
   const defOpen = isDefaultOperatingDay(date);
   if (has) {
-    if (!defOpen) {
-      return false;
-    }
-    return true;
+    // 登録あり: 土日祝 → 特別営業（開）; 平日(祝外) → 特別休業（閉）
+    return defOpen;
   }
-  if (!defOpen) {
-    return true;
-  }
-  return false;
+  // 登録なし: デフォルトどおり（土日祝は休み、平日祝外は営業）
+  return !defOpen;
 }
 
 /** 特別営業日（元が休業デフォの日に登録あり） */

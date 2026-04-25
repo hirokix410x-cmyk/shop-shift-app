@@ -28,7 +28,7 @@ type Props = {
   confirmingId?: string | null;
   onAddForDay?: (date: string, shop: ShopName) => void;
   onEditRow?: (row: ShiftRow) => void;
-  /** 営業・休業の例外行（土日祝=特別営業、平日=特別休） */
+  /** 営業・休業の例外行（土日祝=特別営業、平日(祝日除く)=特別休） */
   shopDayOverrides: ShopDayOverride[];
 };
 
@@ -87,7 +87,7 @@ export function ShiftBoard({
             <span className="text-red-700">日祝</span>＝薄赤
           </p>
           <p className="text-xs text-stone-500">
-            先頭の日＝起算日（初回は今日から7日）。土日祝は原則休（登録で特別営業）。平日(祝外)は原則営（登録で特別休）。
+            先頭の日＝起算日（初回は今日から7日）。土日祝は原則休（登録で特別営業）。平日（祝日を除く）は原則営（登録で特別休）。
           </p>
         </div>
         <div className="flex items-center justify-center gap-2">

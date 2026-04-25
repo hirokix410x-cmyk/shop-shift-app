@@ -135,7 +135,11 @@ export function ShiftApp() {
   }, []);
 
   const refetch = useCallback(async () => {
-    const r = await fetchShiftsFromApi();
+    const [r, overrides] = await Promise.all([
+      fetchShiftsFromApi(),
+      loadShopDayOverridesFromApi(),
+    ]);
+    setShopDayOverrides(overrides);
     if (!r.ok) {
       setLoadError({
         ...r.display,
@@ -145,7 +149,6 @@ export function ShiftApp() {
     }
     setRows(r.shifts);
     setLoadError(null);
-    setShopDayOverrides(await loadShopDayOverridesFromApi());
   }, []);
 
   useEffect(() => {
@@ -153,15 +156,18 @@ export function ShiftApp() {
     (async () => {
       setLoadError(null);
       setLoading(true);
-      const r = await fetchShiftsFromApi();
+      const [r, overrides] = await Promise.all([
+        fetchShiftsFromApi(),
+        loadShopDayOverridesFromApi(),
+      ]);
       if (cancelled) {
         return;
       }
-      if (!r.ok) {
-        setLoadError(r.display);
-      } else {
+      setShopDayOverrides(overrides);
+      if (r.ok) {
         setRows(r.shifts);
-        setShopDayOverrides(await loadShopDayOverridesFromApi());
+      } else {
+        setLoadError(r.display);
       }
       setLoading(false);
     })();

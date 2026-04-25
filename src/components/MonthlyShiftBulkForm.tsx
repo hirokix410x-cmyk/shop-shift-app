@@ -28,7 +28,7 @@ type Props = {
   submitDisabled?: boolean;
   /** 重複案内・取り込み用の既存シフト行 */
   allRows: ShiftRow[];
-  /** 実効で店舗休業となる日（土日祝デフォ休・平日の特別休）の行を一括フォームから除外 */
+  /** 実効で店舗休業となる日（土日祝のデフォルト休・平日(祝日除く)の特別休）の行を一括フォームから除外 */
   shopDayOverrides: ShopDayOverride[];
 };
 
@@ -231,7 +231,7 @@ export function MonthlyShiftBulkForm({
 
       {closedInMonthCount > 0 ? (
         <p className="mb-3 text-sm text-slate-600">
-          営業ルール上この店舗は休み（土日祝のデフォ休・平日の特別休。シート{" "}
+          営業ルール上この店舗は休み（土日祝のデフォルト休・平日（祝日を除く）の特別休。シート{" "}
           <code className="rounded bg-slate-100 px-1">shop_operating_days</code>）のため、{" "}
           <strong>{closedInMonthCount}日分</strong>は一括入力欄に表示しません。
         </p>

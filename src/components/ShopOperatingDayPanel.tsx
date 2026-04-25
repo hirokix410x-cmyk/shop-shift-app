@@ -23,9 +23,9 @@ async function parseJson(
 
 function effectLabel(iso: string): { kind: "open" | "closed"; text: string } {
   if (isDefaultOperatingDay(iso)) {
-    return { kind: "closed", text: "特別休業（通常は営業の日を休みに）" };
+    return { kind: "closed", text: "特別休業（原則営業の日を休みに）" };
   }
-  return { kind: "open", text: "特別営業（土日祝の休み日を営業に）" };
+  return { kind: "open", text: "特別営業（原則休みの日を営業に）" };
 }
 
 export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
@@ -115,9 +115,9 @@ export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
     >
       <h3 className="font-semibold text-slate-900">店舗営業・休業設定</h3>
       <p className="mt-1 text-slate-600">
-        デフォルト: <strong>土日祝は休み</strong>、<strong>平日（祝以外）は営業</strong>。
-        下記で「例外」を登録します（<strong>特別営業</strong>: 元が休みの日を開ける /
-        <strong>特別休業</strong>: 元が営業の日に閉める）。シート
+        デフォルト: <strong>土日祝は休み</strong>、<strong>平日（祝日を除く）は営業</strong>。
+        下記で「例外」を登録します（<strong>特別営業</strong>: 原則休みの日を営業に /
+        <strong>特別休業</strong>: 原則営業の日を休みに）。シート
         <code className="mx-0.5 rounded bg-slate-200/80 px-1">shop_operating_days</code>
         。
       </p>
@@ -222,7 +222,9 @@ export function ShopOperatingDayPanel({ overrides, onAfterChange }: Props) {
           })}
         </ul>
       ) : (
-        <p className="mt-2 text-xs text-slate-500">登録中の例外はありません（デフォルトの土日休・平日営業のまま）。</p>
+        <p className="mt-2 text-xs text-slate-500">
+          登録中の例外はありません（デフォルトの土日祝は休み・平日（祝日を除く）は営業のまま）。
+        </p>
       )}
     </div>
   );
