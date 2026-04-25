@@ -7,7 +7,7 @@ import { addDays, startOfMonth, startOfWindow, toISODateString } from "@/lib/dat
 import { ShiftBoard } from "./ShiftBoard";
 import { MonthlyShopCalendar } from "./MonthlyShopCalendar";
 import { MonthlyShiftBulkForm } from "./MonthlyShiftBulkForm";
-import { PersonalShiftCalendar } from "./PersonalShiftCalendar";
+import { PersonalShiftCalendar, type PersonViewShopFilter } from "./PersonalShiftCalendar";
 import { ShiftFormModal, type FormContext } from "./ShiftFormModal";
 import { ShopOperatingDayPanel } from "./ShopOperatingDayPanel";
 import type { ShopName } from "@/lib/types";
@@ -147,6 +147,8 @@ export function ShiftApp() {
   const [monthCursor, setMonthCursor] = useState<Date>(() => startOfMonth(today()));
   const [monthTabShop, setMonthTabShop] = useState<ShopName>(SHOPS[0]);
   const [personAddShop, setPersonAddShop] = useState<ShopName>(SHOPS[0]);
+  const [personViewShopFilter, setPersonViewShopFilter] =
+    useState<PersonViewShopFilter>("all");
   const [personalStaffName, setPersonalStaffName] = useState("");
   const [adminMode, setAdminMode] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -697,11 +699,52 @@ export function ShiftApp() {
                 </select>
               </label>
             </div>
+            <div
+              className="flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="個人別の店舗表示"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={personViewShopFilter === "all"}
+                onClick={() => {
+                  setPersonViewShopFilter("all");
+                }}
+                className={
+                  personViewShopFilter === "all"
+                    ? "min-h-[40px] rounded-lg border-2 border-amber-500 bg-amber-50 px-3 text-sm font-medium text-amber-950"
+                    : "min-h-[40px] rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                }
+              >
+                2店舗
+              </button>
+              {SHOPS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="tab"
+                  aria-selected={personViewShopFilter === s}
+                  onClick={() => {
+                    setPersonViewShopFilter(s);
+                    setPersonAddShop(s);
+                  }}
+                  className={
+                    personViewShopFilter === s
+                      ? "min-h-[40px] rounded-lg border-2 border-amber-500 bg-amber-50 px-3 text-sm font-medium text-amber-950"
+                      : "min-h-[40px] rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                  }
+                >
+                  {SHOP_TAB_LABEL[s]}
+                </button>
+              ))}
+            </div>
             <PersonalShiftCalendar
               staffName={personalStaffName}
               month={monthCursor}
               onMonthChange={setMonthCursor}
               rows={rows}
+              viewShopFilter={personViewShopFilter}
               addSlotShop={personAddShop}
               onAddSlotShopChange={setPersonAddShop}
               adminMode={adminMode}

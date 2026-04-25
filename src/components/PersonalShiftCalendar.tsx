@@ -27,11 +27,16 @@ function typeShort(t: string) {
   return t.slice(0, 1);
 }
 
+/** 個人別: 両店舗分 or 各店舗で絞り込み */
+export type PersonViewShopFilter = "all" | ShopName;
+
 type Props = {
   staffName: string;
   month: Date;
   onMonthChange: (d: Date) => void;
   rows: ShiftRow[];
+  /** 表示する店舗（両店 / 1店舗） */
+  viewShopFilter: PersonViewShopFilter;
   /** 「＋」で開く新規枠の店舗 */
   addSlotShop: ShopName;
   onAddSlotShopChange: (s: ShopName) => void;
@@ -47,6 +52,7 @@ export function PersonalShiftCalendar({
   month,
   onMonthChange,
   rows,
+  viewShopFilter,
   addSlotShop,
   onAddSlotShopChange,
   adminMode,
@@ -72,6 +78,9 @@ export function PersonalShiftCalendar({
       if (r.staff_name !== staffName) {
         continue;
       }
+      if (viewShopFilter !== "all" && r.shop !== viewShopFilter) {
+        continue;
+      }
       if (r.date < startStr || r.date > endStr) {
         continue;
       }
@@ -86,7 +95,7 @@ export function PersonalShiftCalendar({
       );
     });
     return map;
-  }, [rows, staffName, startStr, endStr]);
+  }, [rows, staffName, viewShopFilter, startStr, endStr]);
 
   if (!staffName.trim()) {
     return (
@@ -97,11 +106,17 @@ export function PersonalShiftCalendar({
     );
   }
 
+  const viewTitle =
+    viewShopFilter === "all"
+      ? "両店舗分"
+      : `${SHOP_TAB_LABEL[viewShopFilter] ?? viewShopFilter}のみ`;
+  const showShopInCell = viewShopFilter === "all";
+
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="text-base font-semibold text-stone-800">
-          個人別月間 — {staffName}（全店舗分）
+          個人別月間 — {staffName}（{viewTitle}）
         </h2>
         <div className="flex items-center justify-center gap-2">
           <button
@@ -213,9 +228,13 @@ export function PersonalShiftCalendar({
                         onClick={() => onEditRow?.(r)}
                         disabled={!onEditRow}
                       >
-                        <span className="font-medium text-amber-900/90">
-                          {SHOP_TAB_LABEL[r.shop] ?? r.shop}
-                        </span>{" "}
+                        {showShopInCell ? (
+                          <>
+                            <span className="font-medium text-amber-900/90">
+                              {SHOP_TAB_LABEL[r.shop] ?? r.shop}
+                            </span>{" "}
+                          </>
+                        ) : null}
                         <span
                           className={
                             r.status === "確定" ? "text-emerald-700" : "text-amber-700"
