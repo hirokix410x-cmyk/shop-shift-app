@@ -50,6 +50,27 @@ function formatSuccessTimestamp(): string {
   }).format(new Date());
 }
 
+function monthBoundsISO(m: Date): { start: string; end: string } {
+  const y = m.getFullYear();
+  const mo = m.getMonth() + 1;
+  const p = (n: number) => String(n).padStart(2, "0");
+  const start = `${y}-${p(mo)}-01`;
+  const last = new Date(y, mo, 0).getDate();
+  const end = `${y}-${p(mo)}-${p(last)}`;
+  return { start, end };
+}
+
+/** 一括承認の対象（氏名入り希望のみ。募集中枠は除外） */
+function isRowPendingForConfirm(r: ShiftRow): boolean {
+  if (r.status !== "希望") {
+    return false;
+  }
+  if (r.staff_name == null) {
+    return false;
+  }
+  return String(r.staff_name).trim() !== "";
+}
+
 function ErrorCallout({ detail }: { detail: ApiErrorDisplay }) {
   return (
     <div
@@ -155,6 +176,7 @@ export function ShiftApp() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [formCtx, setFormCtx] = useState<FormContext | null>(null);
   const [formBusy, setFormBusy] = useState(false);
+  const [batchConfirming, setBatchConfirming] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<ApiErrorDisplay | null>(null);
@@ -257,6 +279,75 @@ export function ShiftApp() {
     const endStr = toISODateString(end);
     return rows.filter((r) => r.date >= startStr && r.date <= endStr);
   }, [rows, weekAnchor]);
+
+  /** 現在の表示切替（週 / 月 / 人）に合わせた「一括承認」対象 id */
+  const pendingConfirmIds = useMemo(() => {
+    if (boardView === "week") {
+      return inWindow.filter(isRowPendingForConfirm).map((r) => r.id);
+    }
+    if (boardView === "month") {
+      const { start, end } = monthBoundsISO(monthCursor);
+      return rows
+        .filter((r) => {
+          if (!isRowPendingForConfirm(r)) {
+            return false;
+          }
+          if (r.date < start || r.date > end) {
+            return false;
+          }
+          if (monthViewShop === "all") {
+            return true;
+          }
+          return r.shop === monthViewShop;
+        })
+        .map((r) => r.id);
+    }
+    if (boardView === "person") {
+      if (!personalStaffName.trim()) {
+        return [];
+      }
+      const { start, end } = monthBoundsISO(monthCursor);
+      return rows
+        .filter((r) => {
+          if (!isRowPendingForConfirm(r)) {
+            return false;
+          }
+          if (r.staff_name !== personalStaffName) {
+            return false;
+          }
+          if (r.date < start || r.date > end) {
+            return false;
+          }
+          if (personViewShopFilter === "all") {
+            return true;
+          }
+          return r.shop === personViewShopFilter;
+        })
+        .map((r) => r.id);
+    }
+    return [];
+  }, [
+    boardView,
+    inWindow,
+    rows,
+    monthCursor,
+    monthViewShop,
+    personalStaffName,
+    personViewShopFilter,
+  ]);
+
+  const bulkConfirmScopeLabel = useMemo(() => {
+    if (boardView === "week") {
+      return "週次リスト（表示中の7日）";
+    }
+    if (boardView === "month") {
+      return "店舗別月間（今の月＋店舗タブ）";
+    }
+    if (boardView === "person") {
+      return "個人別月間（今の月＋氏名＋店舗タブ）";
+    }
+    return "";
+  }, [boardView]);
 
   const applyErrorFromResponse = useCallback(
     (title: string, res: Response, data: { error?: string; hint?: string; errorCode?: string }) => {
@@ -405,6 +496,48 @@ export function ShiftApp() {
     },
     [applyErrorFromResponse, refetch, showSuccessToast],
   );
+
+  const onBatchConfirm = useCallback(async () => {
+    if (pendingConfirmIds.length === 0) {
+      return;
+    }
+    if (
+      !window.confirm(
+        `表示範囲内の希望（氏名入り）${pendingConfirmIds.length}件を、一括で「確定」にします。よろしいですか？`,
+      )
+    ) {
+      return;
+    }
+    setBatchConfirming(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/shifts/confirm-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: pendingConfirmIds }),
+      });
+      const text = await res.text();
+      const data = await parseJsonResponse(res, text);
+      if (!res.ok) {
+        applyErrorFromResponse("一括確定に失敗しました", res, data);
+        return;
+      }
+      const updated = typeof data.updated === "number" ? data.updated : 0;
+      const notFound = Array.isArray(data.notFound)
+        ? (data.notFound as string[])
+        : [];
+      await refetch();
+      if (notFound.length > 0) {
+        showSuccessToast(
+          `一括確定を反映（${updated}件）。ID ${notFound.length}件はシート上に見つかりませんでした。`,
+        );
+      } else {
+        showSuccessToast(`一括で${updated}件を確定しました`);
+      }
+    } finally {
+      setBatchConfirming(false);
+    }
+  }, [applyErrorFromResponse, pendingConfirmIds, refetch, showSuccessToast]);
 
   const scrollToId = useCallback((id: string) => {
     const run = () => {
@@ -567,7 +700,7 @@ export function ShiftApp() {
                 </span>
               </summary>
               <div className="border-t border-amber-200/70 px-3 pb-3 pt-0 text-sm text-stone-600">
-                週次・月間の希望行に「この希望を確定」が表示され、承認作業を行えます。
+                週次・月間の希望行に「この希望を確定」が表示され、承認作業を行えます。表示切替（週/店舗月間/個人別）の下にある「一括承認」で、今見えている範囲の希望をまとめて確定できます（氏名入りの行のみ。募集中枠は除く）。
               </div>
             </details>
             <details className="group rounded-xl border border-amber-200/90 bg-amber-50/80 open:bg-amber-50/95">
@@ -641,6 +774,31 @@ export function ShiftApp() {
             </div>
           </div>
         </div>
+
+        {adminMode ? (
+          <div
+            className="flex flex-col gap-2 rounded-xl border border-emerald-200/90 bg-emerald-50/50 px-3 py-2.5 text-sm text-stone-800 sm:flex-row sm:items-center sm:justify-between"
+            role="region"
+            aria-label="一括承認"
+          >
+            <p>
+              <span className="font-medium text-emerald-900">一括承認</span>{" "}
+              <span className="text-stone-600">（{bulkConfirmScopeLabel}）</span>
+              <span className="ml-1">
+                氏名入りの「希望」が <strong>{pendingConfirmIds.length}件</strong>{" "}
+                あります（募集中枠は除外）
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={onBatchConfirm}
+              disabled={pendingConfirmIds.length === 0 || batchConfirming}
+              className="min-h-[40px] shrink-0 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm enabled:hover:bg-emerald-800 enabled:active:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {batchConfirming ? "一括確定中…" : "まとめて確定する"}
+            </button>
+          </div>
+        ) : null}
 
         {boardView === "week" ? (
           <div id="panel-week" className="scroll-mt-20">

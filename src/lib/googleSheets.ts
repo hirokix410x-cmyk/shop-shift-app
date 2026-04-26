@@ -252,6 +252,41 @@ export async function updateShiftByIdInSheet(
   throw new Error(`該当する行が見つかりません (id: ${id})`);
 }
 
+/**
+ * 指定 id の行のうち status が「希望」のものを「確定」に更新（1 行ずつ save。終端でキャッシュ無効化は 1 回）
+ */
+export async function confirmShiftsByIdsInSheet(
+  ids: readonly string[],
+): Promise<{ updated: number; notFound: string[] }> {
+  const idSet = new Set(
+    ids.map((i) => String(i).trim()).filter((s) => s.length > 0),
+  );
+  if (idSet.size === 0) {
+    return { updated: 0, notFound: [] };
+  }
+  const sheet = await getShiftsWorksheet();
+  const shRows = await sheet.getRows();
+  const notFound = new Set(idSet);
+  let updated = 0;
+  for (const r of shRows) {
+    const rid = cellString(r.get("id"));
+    if (!idSet.has(rid)) {
+      continue;
+    }
+    notFound.delete(rid);
+    const st = String(r.get("status") ?? "").trim();
+    if (st === "希望") {
+      r.set("status", "確定");
+      await r.save();
+      updated += 1;
+    }
+  }
+  if (updated > 0) {
+    invalidateShiftsListCache();
+  }
+  return { updated, notFound: Array.from(notFound) };
+}
+
 export async function deleteShiftByIdInSheet(id: string): Promise<void> {
   const sheet = await getShiftsWorksheet();
   const rows = await sheet.getRows();

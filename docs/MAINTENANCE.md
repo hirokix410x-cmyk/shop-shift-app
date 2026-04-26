@@ -26,7 +26,7 @@
 | 管理者・営業例外 UI | `src/components/ShopOperatingDayPanel.tsx` | `hideTitle` で外見出しと重複回避可 |
 | 営業日ロジック | `src/lib/shopOperatingDay.ts` | ドメインの単一の源に寄せる |
 | Sheets 読み書き | `src/lib/googleSheets.ts` | シフト + `shop_operating_days` 作成/追加/削除 |
-| API | `src/app/api/shifts/route.ts`, `src/app/api/shop-operating-days/route.ts` | バリデーション → Sheets |
+| API | `src/app/api/shifts/route.ts`、一括承認 `src/app/api/shifts/confirm-batch/route.ts`（POST `ids: string[]`）、`src/app/api/shop-operating-days/route.ts` | バリデーション → Sheets。一括承認は `googleSheets.confirmShiftsByIdsInSheet`（希望→確定のみ更新） |
 | 店舗名・定数 | `src/lib/master.ts` | 店舗列挙・`SHOP_TAB_LABEL`・一括/モーダル用氏名（`STAFFS` / `staffOptionsForShop`）・**個人別の氏名プルーダ**（`allKnownStaffNameOptions` / `allStaffNamesForPicker`） |
 | 和暦/土日祝色 | `src/lib/jpCalendarStyle.ts` + `dateUtils.ts` | 表示トーンの統一 |
 | 行の色（募集中等） | `src/lib/shiftStyle.ts` + `master.ts` の `shiftBoardCardSurfaceClass` 等 | 週次カードは **店舗** で色分け（中村=琥珀、九産大=水色）。募集中は赤のまま |
