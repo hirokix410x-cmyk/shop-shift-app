@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { staffOptionsForShop } from "@/lib/master";
 import { SHOPS } from "@/lib/master";
 import { assertProposedShiftsNoTimeDoubleBook } from "@/lib/staffShiftConflict";
+import { ShiftConflictError } from "@/lib/shiftErrors";
 import type { ShopName, ShiftRow, ShiftType } from "@/lib/types";
 
 const TYPES: ShiftType[] = ["全日", "午前", "午後", "イレギュラー"];
@@ -163,7 +164,7 @@ export function ShiftFormModal({
               }
               onClose();
             } catch (err) {
-              if (err instanceof TypeError) {
+              if (err instanceof ShiftConflictError) {
                 setErr(err.message);
                 return;
               }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SHOPS, staffOptionsForShop } from "@/lib/master";
 import { isStoreClosed } from "@/lib/shopOperatingDay";
 import { assertProposedShiftsNoTimeDoubleBook } from "@/lib/staffShiftConflict";
+import { ShiftConflictError } from "@/lib/shiftErrors";
 import type { ShopDayOverride, ShopName, ShiftRow, ShiftType } from "@/lib/types";
 import { addMonths, getDaysInMonth, startOfMonth, toISODateString } from "@/lib/dateUtils";
 import {
@@ -246,9 +247,9 @@ export function MonthlyShiftBulkForm({
         >
           <p>
             この店舗×{year}年{month1}月には、すでに登録のある日が{" "}
-            <strong>{existingDateCount}日分</strong> あります。一括送信すると
-            <strong>同じ日に行が追記</strong>され、スプレッドシート上で重複する可能性があります。整理が必要なら、先に
-            スプレッドシートで削除するか、週次・月間の「修正」で個別に直してください。
+            <strong>{existingDateCount}日分</strong> あります（氏名は問わずカウント）。
+            選択した氏名・区分が既存の登録と重なる日が<strong>1日でもあると、一括送信は全体が失敗</strong>します（エラーにその日付が表示されます）。
+            心当たりがある日は、あらかじめ週次・月間の「修正」で確認・削除してから一括送信してください。
           </p>
           <button
             type="button"
@@ -468,7 +469,7 @@ export function MonthlyShiftBulkForm({
           try {
             assertProposedShiftsNoTimeDoubleBook(rows, allRows, {});
           } catch (e) {
-            if (e instanceof TypeError) {
+            if (e instanceof ShiftConflictError) {
               setSubmitErr(e.message);
               return;
             }

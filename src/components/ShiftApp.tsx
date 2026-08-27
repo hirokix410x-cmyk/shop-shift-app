@@ -374,6 +374,14 @@ export function ShiftApp() {
       const data = await parseJsonResponse(res, text);
       if (!res.ok) {
         applyErrorFromResponse("一括登録に失敗しました", res, data);
+        try {
+          // 失敗時も allRows を最新化する。次の送信前チェックが古いデータで
+          // すり抜けないようにするため（refetch自体の失敗はここでは無視し、
+          // 元の一括登録エラーを優先して表示する）。
+          await refetch();
+        } catch {
+          // no-op
+        }
         throw new Error(data.error ?? "bulk failed");
       }
       await refetch();

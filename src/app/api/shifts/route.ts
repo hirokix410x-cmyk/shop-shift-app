@@ -4,6 +4,7 @@ import {
   appendShiftsToSheet,
   deleteShiftByIdInSheet,
   listShiftsFromSheet,
+  loadShiftsFromSheetOnce,
   shiftFromRequestBody,
   shiftPatchFromRequestBody,
   shiftsArrayFromRequestBody,
@@ -18,6 +19,7 @@ import {
   logShiftsConnectionFailure,
   toClientSheetErrorPayload,
 } from "@/lib/sheetConnectionLog";
+import { ShiftConflictError, ShiftFormatError } from "@/lib/shiftErrors";
 
 export const runtime = "nodejs";
 
@@ -76,24 +78,34 @@ export async function POST(request: Request) {
       Array.isArray((body as { shifts: unknown }).shifts)
     ) {
       const shifts = shiftsArrayFromRequestBody(body);
-      const existing = await listShiftsFromSheet();
+      // 重複判定はキャッシュを経由しない生読み取りを使う（インスタンス間で
+      // キャッシュが共有されないため、キャッシュ経由だと直近の書き込みを
+      // 見逃して二重登録を通してしまう恐れがある）
+      const existing = await loadShiftsFromSheetOnce();
       assertProposedShiftsNoTimeDoubleBook(shifts, existing, {});
       await appendShiftsToSheet(shifts);
       return NextResponse.json({ ok: true, count: shifts.length, shifts });
     }
     const shift = shiftFromRequestBody(body);
-    const existingSingle = await listShiftsFromSheet();
+    const existingSingle = await loadShiftsFromSheetOnce();
     assertProposedShiftsNoTimeDoubleBook([shift], existingSingle, {});
     await appendShiftToSheet(shift);
     return NextResponse.json({ ok: true, shift });
   } catch (e) {
-    if (e instanceof TypeError) {
-      console.error("[/api/shifts] POST バリデーション失敗 (TypeError)", e.message);
+    if (e instanceof ShiftFormatError) {
+      console.error("[/api/shifts] POST バリデーション失敗 (ShiftFormatError)", e.message);
       return jsonError(400, {
         error: e.message,
         errorCode: "VALIDATION",
         hint:
           "単一行は従来どおり。一括の場合は { shifts: ShiftRow[] } 形式にしてください。",
+      });
+    }
+    if (e instanceof ShiftConflictError) {
+      console.error("[/api/shifts] POST 重複エラー (ShiftConflictError)", e.message);
+      return jsonError(400, {
+        error: e.message,
+        errorCode: "CONFLICT",
       });
     }
     logShiftsConnectionFailure("POST", "save", e);
@@ -121,7 +133,8 @@ export async function PATCH(request: Request) {
   }
   try {
     const p = shiftPatchFromRequestBody(body);
-    const all = await listShiftsFromSheet();
+    // 重複判定はキャッシュを経由しない生読み取りを使う（POSTと同じ理由）
+    const all = await loadShiftsFromSheetOnce();
     const current = all.find((r) => r.id === p.id);
     if (!current) {
       return jsonError(404, {
@@ -145,11 +158,18 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ ok: true, id: p.id, patch: p });
   } catch (e) {
-    if (e instanceof TypeError) {
-      console.error("[/api/shifts] PATCH バリデーション失敗", e.message);
+    if (e instanceof ShiftFormatError) {
+      console.error("[/api/shifts] PATCH バリデーション失敗 (ShiftFormatError)", e.message);
       return jsonError(400, {
         error: e.message,
         errorCode: "VALIDATION",
+      });
+    }
+    if (e instanceof ShiftConflictError) {
+      console.error("[/api/shifts] PATCH 重複エラー (ShiftConflictError)", e.message);
+      return jsonError(400, {
+        error: e.message,
+        errorCode: "CONFLICT",
       });
     }
     logShiftsConnectionFailure("PATCH", "save", e);
