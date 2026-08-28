@@ -3,7 +3,7 @@ export const SHOPS = ["中村学園大学前店", "九産大店"] as const;
 export const STAFFS: Record<string, string[]> = {
   中村学園大学前店: ["福田"],
   九産大店: ["宮﨑"],
-  本部社員: ["榎本", "七種", "大角", "平田"],
+  本部社員: ["榎本", "七種", "佐野", "平田"],
 } as const;
 
 export const HQ_STAFFS = new Set<string>(STAFFS["本部社員"]);
