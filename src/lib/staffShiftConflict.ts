@@ -1,4 +1,5 @@
 import { SHOP_TAB_LABEL } from "./master";
+import { ShiftConflictError } from "./shiftErrors";
 import type { ShiftStatus, ShopName, ShiftRow, ShiftType } from "./types";
 
 /** 同一人物・同一日で物理的に重なる区分の組合せ */
@@ -20,7 +21,7 @@ export function shiftTypesTimeOverlap(t1: ShiftType, t2: ShiftType): boolean {
 
 export function doubleBookingErrorMessage(name: string, existingRow: ShiftRow): string {
   const place = SHOP_TAB_LABEL[existingRow.shop] ?? existingRow.shop;
-  return `${name}さんは同日の${place}に既に登録されています。`;
+  return `${name}さんは${existingRow.date}の${place}に既に登録されています。`;
 }
 
 function hasStaffOverlap(
@@ -57,7 +58,7 @@ export function assertProposedShiftsNoTimeDoubleBook(
     for (const o of pool) {
       if (hasStaffOverlap(p, o)) {
         if (p.staff_name) {
-          throw new TypeError(doubleBookingErrorMessage(p.staff_name, o));
+          throw new ShiftConflictError(doubleBookingErrorMessage(p.staff_name, o), o);
         }
       }
     }

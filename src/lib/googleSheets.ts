@@ -1,6 +1,7 @@
 import { GoogleSpreadsheet, type GoogleSpreadsheetRow } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { SHOPS } from "./master";
+import { ShiftFormatError } from "./shiftErrors";
 import type { ShiftRow, ShopDayOverride, ShiftStatus, ShiftType, ShopName } from "./types";
 
 export const SHIFT_SHEET_HEADER = [
@@ -146,7 +147,13 @@ function invalidateShiftsListCache(): void {
   shiftsListCache = null;
 }
 
-async function loadShiftsFromSheetOnce(): Promise<ShiftRow[]> {
+/**
+ * キャッシュを経由しない生読み取り。書き込み系（POST/PATCH）の重複判定は
+ * 必ずこちらを使う（インスタンス間でキャッシュが共有されないため、キャッシュ
+ * 経由だと直近の書き込みを見逃して二重登録を通してしまう恐れがある）。
+ * 一覧表示（GET）は listShiftsFromSheet のキャッシュ経由のままでよい。
+ */
+export async function loadShiftsFromSheetOnce(): Promise<ShiftRow[]> {
   const sheet = await getShiftsWorksheet();
   const rows = await sheet.getRows();
   const out: ShiftRow[] = [];
@@ -303,11 +310,11 @@ export async function deleteShiftByIdInSheet(id: string): Promise<void> {
 
 export function shiftsArrayFromRequestBody(data: unknown): ShiftRow[] {
   if (data == null || typeof data !== "object") {
-    throw new TypeError("JSON オブジェクトが必要です");
+    throw new ShiftFormatError("JSON オブジェクトが必要です");
   }
   const o = data as { shifts?: unknown };
   if (!Array.isArray(o.shifts) || o.shifts.length === 0) {
-    throw new TypeError("shifts には1件以上のオブジェクト配列を指定してください");
+    throw new ShiftFormatError("shifts には1件以上のオブジェクト配列を指定してください");
   }
   const out: ShiftRow[] = [];
   for (let i = 0; i < o.shifts.length; i++) {
@@ -315,7 +322,7 @@ export function shiftsArrayFromRequestBody(data: unknown): ShiftRow[] {
       out.push(shiftFromRequestBody(o.shifts[i]));
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
-      throw new TypeError(`shifts[${i}]: ${m}`);
+      throw new ShiftFormatError(`shifts[${i}]: ${m}`);
     }
   }
   return out;
@@ -328,32 +335,32 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  */
 export function shiftFromRequestBody(data: unknown): ShiftRow {
   if (!data || typeof data !== "object") {
-    throw new TypeError("JSON オブジェクトが必要です");
+    throw new ShiftFormatError("JSON オブジェクトが必要です");
   }
   const o = data as Record<string, unknown>;
   const id = String(o.id ?? "").trim();
-  if (!id) throw new TypeError("id が空です");
+  if (!id) throw new ShiftFormatError("id が空です");
 
   const date = String(o.date ?? "").trim();
   if (!DATE_RE.test(date)) {
-    throw new TypeError("date は YYYY-MM-DD 形式で指定してください");
+    throw new ShiftFormatError("date は YYYY-MM-DD 形式で指定してください");
   }
 
   const shopRaw = String(o.shop ?? "").trim();
   if (!SHOP_SET.has(shopRaw)) {
-    throw new TypeError("shop が正しくありません");
+    throw new ShiftFormatError("shop が正しくありません");
   }
   const shop = shopRaw as ShopName;
 
   const sn = o.staff_name;
   if (sn == null || String(sn).trim() === "") {
-    throw new TypeError("氏名（staff_name）は必須です。リストから選択してください。");
+    throw new ShiftFormatError("氏名（staff_name）は必須です。リストから選択してください。");
   }
   const staff_name = String(sn).trim();
 
   const typeRaw = String(o.type ?? "").trim();
   if (!SHIFT_TYPE_SET.has(typeRaw)) {
-    throw new TypeError("type（全日/午前/午後/イレギュラー）が不正です");
+    throw new ShiftFormatError("type（全日/午前/午後/イレギュラー）が不正です");
   }
   const type = typeRaw as ShiftType;
 
@@ -361,7 +368,7 @@ export function shiftFromRequestBody(data: unknown): ShiftRow {
 
   const statusRaw = String(o.status ?? "").trim();
   if (!STATUS_SET.has(statusRaw)) {
-    throw new TypeError("status（希望/確定）が不正です");
+    throw new ShiftFormatError("status（希望/確定）が不正です");
   }
   const status = statusRaw as ShiftStatus;
 
@@ -378,12 +385,12 @@ export function shiftPatchFromRequestBody(data: unknown): {
   shop?: ShopName;
 } {
   if (data == null || typeof data !== "object") {
-    throw new TypeError("JSON オブジェクトが必要です");
+    throw new ShiftFormatError("JSON オブジェクトが必要です");
   }
   const o = data as Record<string, unknown>;
   const id = String(o.id ?? "").trim();
   if (!id) {
-    throw new TypeError("id が空です");
+    throw new ShiftFormatError("id が空です");
   }
   const patch: {
     id: string;
@@ -398,14 +405,14 @@ export function shiftPatchFromRequestBody(data: unknown): {
   if ("status" in o && o.status != null && String(o.status).trim() !== "") {
     const s = String(o.status).trim();
     if (!STATUS_SET.has(s)) {
-      throw new TypeError("status は 希望 または 確定 です");
+      throw new ShiftFormatError("status は 希望 または 確定 です");
     }
     patch.status = s as ShiftStatus;
   }
   if ("type" in o && o.type != null && String(o.type).trim() !== "") {
     const t = String(o.type).trim();
     if (!SHIFT_TYPE_SET.has(t)) {
-      throw new TypeError("type が不正です");
+      throw new ShiftFormatError("type が不正です");
     }
     patch.type = t as ShiftType;
   }
@@ -415,21 +422,21 @@ export function shiftPatchFromRequestBody(data: unknown): {
   if ("staff_name" in o) {
     const sn = o.staff_name;
     if (sn == null || String(sn).trim() === "") {
-      throw new TypeError("氏名（staff_name）を空にすることはできません。リストから選択してください。");
+      throw new ShiftFormatError("氏名（staff_name）を空にすることはできません。リストから選択してください。");
     }
     patch.staff_name = String(sn).trim();
   }
   if ("date" in o && o.date != null && String(o.date).trim() !== "") {
     const d = String(o.date).trim();
     if (!DATE_RE.test(d)) {
-      throw new TypeError("date は YYYY-MM-DD 形式で指定してください");
+      throw new ShiftFormatError("date は YYYY-MM-DD 形式で指定してください");
     }
     patch.date = d;
   }
   if ("shop" in o && o.shop != null && String(o.shop).trim() !== "") {
     const sh = String(o.shop).trim();
     if (!SHOP_SET.has(sh)) {
-      throw new TypeError("shop が正しくありません");
+      throw new ShiftFormatError("shop が正しくありません");
     }
     patch.shop = sh as ShopName;
   }
@@ -442,7 +449,7 @@ export function shiftPatchFromRequestBody(data: unknown): {
     patch.date === undefined &&
     patch.shop === undefined
   ) {
-    throw new TypeError(
+    throw new ShiftFormatError(
       "status / type / note / staff_name / date / shop のいずれかを指定してください",
     );
   }
